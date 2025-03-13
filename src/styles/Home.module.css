@@ -1,5 +1,7 @@
 .container {
   padding: 0 2rem;
+  background: linear-gradient(to bottom, #f8f9fa, #e9ecef);
+  min-height: 100vh;
 }
 
 .main {
@@ -10,6 +12,8 @@
   flex-direction: column;
   justify-content: center;
   align-items: center;
+  max-width: 1200px;
+  margin: 0 auto;
 }
 
 .footer {
@@ -19,6 +23,8 @@
   border-top: 1px solid #eaeaea;
   justify-content: center;
   align-items: center;
+  margin-top: 2rem;
+  color: #6c757d;
 }
 
 .footer a {
@@ -26,6 +32,14 @@
   justify-content: center;
   align-items: center;
   flex-grow: 1;
+  color: #0d76fc;
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.footer a:hover {
+  color: #0056b3;
+  text-decoration: underline;
 }
 
 .title a {
@@ -40,9 +54,18 @@
 }
 
 .title {
-  margin: 3rem 0;
-  line-height: 1;
+  margin: 3rem 0 1.5rem;
+  line-height: 1.2;
   font-size: 2.5rem;
+  font-weight: 600;
+  text-align: center;
+  color: #343a40;
+}
+
+.subtitle {
+  font-size: 1.5rem;
+  color: #495057;
+  margin-bottom: 2rem;
 }
 
 .title,
@@ -53,7 +76,8 @@
 .description {
   margin: 0 0 2rem;
   line-height: 1.5;
-  font-size: 1.5rem;
+  font-size: 1.25rem;
+  color: #6c757d;
 }
 
 .grid {
@@ -62,18 +86,21 @@
   justify-content: center;
   flex-wrap: wrap;
   max-width: 800px;
+  width: 100%;
 }
 
 .card {
   margin: 1rem;
-  padding: 1.5rem;
+  padding: 1.8rem;
   text-align: left;
-  color: inherit;
+  color: #495057;
   text-decoration: none;
   border: 1px solid #eaeaea;
   border-radius: 10px;
-  transition: color 0.15s ease, border-color 0.15s ease;
+  transition: all 0.15s ease;
   max-width: 350px;
+  background-color: white;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
 }
 
 .card:hover,
@@ -81,22 +108,122 @@
 .card:active {
   color: #0d76fc;
   border-color: #0d76fc;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
 }
 
 .card h2 {
   margin: 0 0 1rem 0;
   font-size: 1.2rem;
+  font-weight: 600;
+  color: #343a40;
 }
 
 .card p {
   margin: 0;
-  font-size: 1.2rem;
+  font-size: 1.1rem;
   line-height: 1.5;
+}
+
+.tabButton {
+  background-color: #f0f0f0;
+  color: #495057;
+  border: none;
+  padding: 0.6rem 1.2rem;
+  cursor: pointer;
+  font-size: 0.95rem;
+  transition: all 0.15s ease;
+}
+
+.tabButtonActive {
+  background-color: #0d76fc;
+  color: white;
+}
+
+.tabButton:first-child {
+  border-radius: 4px 0 0 4px;
+}
+
+.tabButton:last-child {
+  border-radius: 0 4px 4px 0;
+}
+
+.tabContainer {
+  display: flex;
+  margin: 1.5rem 0;
+  flex-wrap: wrap;
+}
+
+.formInput {
+  width: 100%;
+  padding: 0.7rem;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 1rem;
+  transition: border-color 0.15s ease-in-out;
+}
+
+.formInput:focus {
+  border-color: #80bdff;
+  outline: 0;
+  box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.formLabel {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  color: #495057;
+}
+
+.actionButton {
+  background-color: #0d76fc;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 0.6rem 1.2rem;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: background-color 0.15s ease;
+}
+
+.actionButton:hover:not(:disabled) {
+  background-color: #0056b3;
+}
+
+.actionButton:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.successMessage {
+  color: #28a745;
+  margin-top: 1rem;
+  padding: 0.5rem;
+  border-radius: 4px;
+  background-color: rgba(40, 167, 69, 0.1);
+}
+
+.errorMessage {
+  color: #dc3545;
+  margin-top: 1rem;
+  padding: 0.5rem;
+  border-radius: 4px;
+  background-color: rgba(220, 53, 69, 0.1);
 }
 
 @media (max-width: 600px) {
   .grid {
     width: 100%;
     flex-direction: column;
+  }
+  
+  .tabContainer {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .card {
+    width: 100%;
   }
 }
