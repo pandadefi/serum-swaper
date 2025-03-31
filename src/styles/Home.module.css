@@ -269,39 +269,45 @@
   color: #6c757d;
 }
 
+.tabContainer {
+  display: flex;
+  width: 100%;
+  max-width: 500px;
+  background-color: #f5f7fa;
+  border-radius: 16px;
+  padding: 4px;
+  margin-bottom: 16px;
+}
+
 .tabButton {
-  background-color: #f0f0f0;
-  color: #495057;
+  flex: 1;
+  background-color: transparent;
+  color: #666;
   border: none;
-  padding: 0.8rem 1.2rem;
+  padding: 12px;
   cursor: pointer;
   font-size: 0.95rem;
-  transition: all 0.15s ease;
+  transition: all 0.2s ease;
   display: flex;
   align-items: center;
-  border-bottom: 3px solid transparent;
+  justify-content: center;
+  border-radius: 12px;
+  font-weight: 500;
+  min-height: 48px;
 }
 
 .tabButtonActive {
   background-color: white;
   color: #00A3FF;
-  border-bottom: 3px solid #00A3FF;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
-.tabButton:first-child {
-  border-radius: 12px 0 0 0;
+.tabButton:hover:not(.tabButtonActive) {
+  background-color: rgba(255, 255, 255, 0.5);
 }
 
-.tabButton:last-child {
-  border-radius: 0 12px 0 0;
-}
-
-.tabContainer {
-  display: flex;
-  margin: 0 0 -1px 0;
-  flex-wrap: wrap;
-  width: 100%;
-  max-width: 500px;
+.tabButton svg {
+  color: currentColor;
 }
 
 .formInput {

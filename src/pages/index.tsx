@@ -133,11 +133,14 @@ const Home: NextPage = () => {
 
         <div className={styles.logoContainer}>
           <div className={styles.logo}>
-            <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="24" cy="24" r="24" fill="#00A3FF" />
-              <path d="M36 24C36 30.6274 30.6274 36 24 36C17.3726 36 12 30.6274 12 24C12 17.3726 17.3726 12 24 12C30.6274 12 36 17.3726 36 24Z" fill="white" />
-              <path d="M31 24C31 27.866 27.866 31 24 31C20.134 31 17 27.866 17 24C17 20.134 20.134 17 24 17C27.866 17 31 20.134 31 24Z" fill="#00A3FF" />
-              <path d="M24 28L28 24L24 20L20 24L24 28Z" fill="white" />
+            <svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="32" cy="32" r="32" fill="#00A3FF" />
+              <path d="M32 10L14 32L32 40L50 32L32 10Z" fill="white" />
+              <path d="M32 47L14 32L32 40L50 32L32 47Z" fill="#B5E8FF" />
+              <path d="M32 28L24 24L32 12L40 24L32 28Z" fill="#00A3FF" />
+              <path d="M32 54L50 32V39L32 54Z" fill="#80D9FF" />
+              <path d="M32 54L14 32V39L32 54Z" fill="#80D9FF" />
+              <circle cx="32" cy="32" r="4" fill="white" />
             </svg>
             <h1 className={styles.title}>Staked stETH</h1>
           </div>
