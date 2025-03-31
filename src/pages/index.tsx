@@ -3,9 +3,9 @@ import type { NextPage } from 'next';
 import Head from 'next/head';
 import styles from '../styles/Home.module.css';
 import { useState, useEffect } from 'react';
-import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi';
-import { parseEther } from 'viem';
-import { SWAPPER_CONTRACT_ADDRESS, SWAPPER_ABI } from '../constants';
+import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract, useBalance } from 'wagmi';
+import { parseEther, formatEther } from 'viem';
+import { SWAPPER_CONTRACT_ADDRESS, SWAPPER_ABI, STETH_ADDRESS, ERC20_ABI } from '../constants';
 import Link from 'next/link';
 
 const Home: NextPage = () => {
@@ -13,7 +13,65 @@ const Home: NextPage = () => {
   const [isAllowed, setIsAllowed] = useState(false);
   const [isOwner, setIsOwner] = useState(false);
   const [activeTab, setActiveTab] = useState<'depositEth' | 'depositSteth' | 'withdrawEth' | 'withdrawSteth'>('depositEth');
+  const [isMounted, setIsMounted] = useState(false);
+  const [isApproving, setIsApproving] = useState(false);
   const { address, isConnected } = useAccount();
+  
+  // Set mounted state for client-side rendering
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+  
+  // Fetch user's ETH balance in wallet
+  const { data: ethBalanceData, refetch: refetchEthBalance } = useBalance({
+    address,
+    query: {
+      enabled: !!address && isMounted,
+    },
+  });
+  
+  // Fetch user's stETH balance in wallet
+  const { data: stethBalanceData, refetch: refetchStethBalance } = useReadContract({
+    address: STETH_ADDRESS,
+    abi: ERC20_ABI,
+    functionName: 'balanceOf',
+    args: [address || '0x0000000000000000000000000000000000000000'],
+    query: {
+      enabled: !!address,
+    },
+  });
+  
+  // Fetch user's stETH allowance for the contract
+  const { data: stethAllowanceData, refetch: refetchStethAllowance } = useReadContract({
+    address: STETH_ADDRESS,
+    abi: ERC20_ABI,
+    functionName: 'allowance',
+    args: [address || '0x0000000000000000000000000000000000000000', SWAPPER_CONTRACT_ADDRESS],
+    query: {
+      enabled: !!address,
+    },
+  });
+  
+  // Fetch user's balances in contract directly using the balances mapping
+  const { data: contractBalanceData, refetch: refetchContractBalance } = useReadContract({
+    address: SWAPPER_CONTRACT_ADDRESS,
+    abi: SWAPPER_ABI,
+    functionName: 'balances',
+    args: [address || '0x0000000000000000000000000000000000000000'],
+    query: {
+      enabled: !!address,
+    },
+  });
+  
+  // Format the wallet stETH balance
+  const formattedStethBalance = stethBalanceData ? 
+    parseFloat(formatEther(stethBalanceData)).toFixed(4) : 
+    '0.0000';
+    
+  // Format the contract balance
+  const formattedContractBalance = contractBalanceData ? 
+    parseFloat(formatEther(contractBalanceData)).toFixed(4) : 
+    '0.0000';
   
   // Read contract to check if connected wallet is owner
   const { data: ownerAddress } = useReadContract({
@@ -53,6 +111,47 @@ const Home: NextPage = () => {
   const { isLoading: isConfirming, isSuccess: isConfirmed } = 
     useWaitForTransactionReceipt({ hash });
 
+  // Reset form and refetch balances after successful transaction
+  useEffect(() => {
+    if (isConfirmed) {
+      setAmount('');
+      setIsApproving(false);
+      // Refetch all balances
+      refetchEthBalance();
+      refetchStethBalance();
+      refetchContractBalance();
+      refetchStethAllowance();
+    }
+  }, [isConfirmed, refetchEthBalance, refetchStethBalance, refetchContractBalance, refetchStethAllowance]);
+
+  // Function to check if stETH allowance is sufficient
+  const checkAndApproveSteth = async () => {
+    if (!amount || !address || stethAllowanceData === undefined) return false;
+    
+    const amountBigInt = parseEther(amount);
+    
+    // If current allowance is less than the amount, approve first
+    if (stethAllowanceData < amountBigInt) {
+      setIsApproving(true);
+      try {
+        // Approve max uint256 to avoid frequent approvals
+        writeContract({
+          address: STETH_ADDRESS,
+          abi: ERC20_ABI,
+          functionName: 'approve',
+          args: [SWAPPER_CONTRACT_ADDRESS, parseEther('1000000000')], // Very large allowance
+        });
+        return false; // Return false to indicate approval is in progress
+      } catch (err) {
+        console.error('Error approving stETH:', err);
+        setIsApproving(false);
+        return false;
+      }
+    }
+    
+    return true; // Sufficient allowance
+  };
+
   // Handle deposit ETH
   const handleDepositEth = async () => {
     if (!amount || !isAllowed) return;
@@ -73,13 +172,26 @@ const Home: NextPage = () => {
   const handleDepositSteth = async () => {
     if (!amount || !isAllowed) return;
     
+    // Set amount in BigInt for comparison
+    const amountBigInt = parseEther(amount);
+    
     try {
-      // Note: This would require ERC20 approve first
+      // Check if we need approval first
+      if (stethAllowanceData === undefined || stethAllowanceData < amountBigInt) {
+        // If we need approval and not already approving, start approval
+        if (!isApproving) {
+          await checkAndApproveSteth();
+        }
+        // Don't proceed with deposit if we're still in approval phase
+        return;
+      }
+      
+      // If we have allowance, proceed with deposit
       writeContract({
         address: SWAPPER_CONTRACT_ADDRESS,
         abi: SWAPPER_ABI,
         functionName: 'depositSteth',
-        args: [parseEther(amount)],
+        args: [amountBigInt],
       });
     } catch (err) {
       console.error('Error depositing stETH:', err);
@@ -118,6 +230,49 @@ const Home: NextPage = () => {
     }
   };
 
+  // Handle setting max amount
+  const handleSetMaxAmount = () => {
+    if (activeTab === 'depositEth' && ethBalanceData) {
+      // Leave a little ETH for gas
+      const maxAmount = parseFloat(formatEther(ethBalanceData.value)) - 0.01;
+      setAmount(maxAmount > 0 ? maxAmount.toString() : '0');
+    } else if (activeTab === 'depositSteth' && stethBalanceData) {
+      setAmount(formatEther(stethBalanceData));
+    } else if ((activeTab === 'withdrawEth' || activeTab === 'withdrawSteth') && contractBalanceData) {
+      setAmount(formatEther(contractBalanceData));
+    }
+  };
+
+  // Get action button text based on current state
+  const getActionButtonText = () => {
+    if (isPending) return 'Confirming...';
+    if (isConfirming) return 'Processing...';
+    
+    if (activeTab === 'depositSteth' && isApproving) {
+      return 'Approving stETH...';
+    }
+    
+    return activeTab.startsWith('deposit') ? 'Deposit' : 'Withdraw';
+  };
+
+  // Check if button should be disabled
+  const isButtonDisabled = () => {
+    return !amount || isPending || isConfirming || 
+      (activeTab === 'depositSteth' && isApproving);
+  };
+  
+  // Check if stETH requires approval for deposit
+  const needsStethApproval = () => {
+    if (activeTab !== 'depositSteth' || !amount || stethAllowanceData === undefined) return false;
+    return stethAllowanceData < parseEther(amount || '0');
+  };
+
+  // Format transaction hash for display
+  const formatTxHash = (hash: string) => {
+    if (!hash) return '';
+    return `${hash.substring(0, 6)}...${hash.substring(hash.length - 4)}`;
+  };
+
   return (
     <div className={styles.container}>
       <Head>
@@ -149,183 +304,221 @@ const Home: NextPage = () => {
           </p>
         </div>
 
-        {isOwner && (
-          <div className={styles.adminCard}>
-            <Link href="/admin" className={styles.adminLink}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 4L4 8L12 12L20 8L12 4Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M4 16L12 20L20 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M4 12L12 16L20 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-              <span>Admin Panel</span>
-            </Link>
-          </div>
-        )}
-
-        {!isConnected ? (
-          <div className={styles.connectCard}>
-            <div className={styles.connectIcon}>
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M10 16.5L14 12.5L10 8.5" stroke="#0D76FC" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M14 12.5H3" stroke="#0D76FC" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M7 7V5C7 4.46957 7.21071 3.96086 7.58579 3.58579C7.96086 3.21071 8.46957 3 9 3H19C19.5304 3 20.0391 3.21071 20.4142 3.58579C20.7893 3.96086 21 4.46957 21 5V20C21 20.5304 20.7893 21.0391 20.4142 21.4142C20.0391 21.7893 19.5304 22 19 22H9C8.46957 22 7.96086 21.7893 7.58579 21.4142C7.21071 21.0391 7 20.5304 7 20V18" stroke="#0D76FC" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </div>
-            <p>Please connect your wallet to use the swapper.</p>
-          </div>
-        ) : !isAllowed ? (
-          <div className={styles.card} style={{ textAlign: 'center', borderColor: '#dc3545' }}>
-            <p style={{ color: '#dc3545', marginBottom: '1rem' }}>
-              Your address is not allowed to use this contract.
-            </p>
-            <p>
-              If you believe this is an error, please contact the contract owner or check your address in the{' '}
-              {isOwner ? (
-                <Link href="/admin" style={{ fontWeight: 500 }}>
-                  Admin Panel
-                </Link>
-              ) : (
-                'Admin Panel'
-              )}.
-            </p>
-            <div style={{ marginTop: '1rem', fontSize: '0.9rem', color: '#6c757d' }}>
-              Connected address: {address}
-            </div>
-          </div>
-        ) : (
+        {isMounted && (
           <>
-            <div className={styles.tabContainer}>
-              <button 
-                onClick={() => setActiveTab('depositEth')} 
-                className={`${styles.tabButton} ${activeTab === 'depositEth' ? styles.tabButtonActive : ''}`}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{
-                  marginRight: '8px', 
-                  color: activeTab === 'depositEth' ? '#00A3FF' : '#666666',
-                  transition: 'color 0.2s ease'
-                }}>
-                  <path d="M12 4V20M12 20L6 14M12 20L18 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-                Deposit ETH
-              </button>
-              <button 
-                onClick={() => setActiveTab('depositSteth')} 
-                className={`${styles.tabButton} ${activeTab === 'depositSteth' ? styles.tabButtonActive : ''}`}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{
-                  marginRight: '8px', 
-                  color: activeTab === 'depositSteth' ? '#00A3FF' : '#666666',
-                  transition: 'color 0.2s ease'
-                }}>
-                  <path d="M12 4V20M12 20L6 14M12 20L18 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-                Deposit stETH
-              </button>
-              <button 
-                onClick={() => setActiveTab('withdrawEth')} 
-                className={`${styles.tabButton} ${activeTab === 'withdrawEth' ? styles.tabButtonActive : ''}`}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{
-                  marginRight: '8px', 
-                  color: activeTab === 'withdrawEth' ? '#00A3FF' : '#666666',
-                  transition: 'color 0.2s ease'
-                }}>
-                  <path d="M12 20V4M12 4L6 10M12 4L18 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-                Withdraw ETH
-              </button>
-              <button 
-                onClick={() => setActiveTab('withdrawSteth')} 
-                className={`${styles.tabButton} ${activeTab === 'withdrawSteth' ? styles.tabButtonActive : ''}`}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{
-                  marginRight: '8px', 
-                  color: activeTab === 'withdrawSteth' ? '#00A3FF' : '#666666',
-                  transition: 'color 0.2s ease'
-                }}>
-                  <path d="M12 20V4M12 4L6 10M12 4L18 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-                Withdraw stETH
-              </button>
-            </div>
+            {isOwner && (
+              <div className={styles.adminCard}>
+                <Link href="/admin" className={styles.adminLink}>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 4L4 8L12 12L20 8L12 4Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M4 16L12 20L20 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M4 12L12 16L20 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  <span>Admin Panel</span>
+                </Link>
+              </div>
+            )}
 
-            <div className={styles.swapCard}>
-              <div className={styles.swapHeader}>
-                <h2>
-                  {activeTab === 'depositEth' ? 'Deposit ETH' : 
-                   activeTab === 'depositSteth' ? 'Deposit stETH' :
-                   activeTab === 'withdrawEth' ? 'Withdraw ETH' : 'Withdraw stETH'}
-                </h2>
-                <div className={styles.tokenIcon}>
-                  {activeTab.includes('Eth') ? (
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M12 2L5 12L12 16L19 12L12 2Z" fill="#627EEA"/>
-                      <path d="M12 16V22L19 12L12 16Z" fill="#627EEA"/>
-                      <path d="M12 16V22L5 12L12 16Z" fill="#627EEA"/>
-                      <path d="M12 2V10L19 12L12 2Z" fill="#C5CAF7"/>
-                      <path d="M12 2V10L5 12L12 2Z" fill="#C5CAF7"/>
-                    </svg>
+            {!isConnected ? (
+              <div className={styles.connectCard}>
+                <div className={styles.connectIcon}>
+                  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M10 16.5L14 12.5L10 8.5" stroke="#0D76FC" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M14 12.5H3" stroke="#0D76FC" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M7 7V5C7 4.46957 7.21071 3.96086 7.58579 3.58579C7.96086 3.21071 8.46957 3 9 3H19C19.5304 3 20.0391 3.21071 20.4142 3.58579C20.7893 3.96086 21 4.46957 21 5V20C21 20.5304 20.7893 21.0391 20.4142 21.4142C20.0391 21.7893 19.5304 22 19 22H9C8.46957 22 7.96086 21.7893 7.58579 21.4142C7.21071 21.0391 7 20.5304 7 20V18" stroke="#0D76FC" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </div>
+                <p>Please connect your wallet to use the swapper.</p>
+              </div>
+            ) : !isAllowed ? (
+              <div className={styles.card} style={{ textAlign: 'center', borderColor: '#dc3545' }}>
+                <p style={{ color: '#dc3545', marginBottom: '1rem' }}>
+                  Your address is not allowed to use this contract.
+                </p>
+                <p>
+                  If you believe this is an error, please contact the contract owner or check your address in the{' '}
+                  {isOwner ? (
+                    <Link href="/admin" style={{ fontWeight: 500 }}>
+                      Admin Panel
+                    </Link>
                   ) : (
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M12 2L5 12L12 16L19 12L12 2Z" fill="#00A3FF"/>
-                      <path d="M12 16V22L19 12L12 16Z" fill="#00A3FF"/>
-                      <path d="M12 16V22L5 12L12 16Z" fill="#00A3FF"/>
-                      <path d="M12 2V10L19 12L12 2Z" fill="#8CD9FF"/>
-                      <path d="M12 2V10L5 12L12 2Z" fill="#8CD9FF"/>
-                    </svg>
-                  )}
+                    'Admin Panel'
+                  )}.
+                </p>
+                <div style={{ marginTop: '1rem', fontSize: '0.9rem', color: '#6c757d' }}>
+                  Connected address: {address}
                 </div>
               </div>
-              
-              <div className={styles.swapBody}>
-                <div className={styles.inputGroup}>
-                  <label htmlFor="amount" className={styles.formLabel}>
-                    Amount:
-                  </label>
-                  <div className={styles.amountInputContainer}>
-                    <input
-                      id="amount"
-                      type="text"
-                      value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
-                      placeholder="0.0"
-                      className={styles.formInput}
-                    />
-                    <div className={styles.currencyBadge}>
-                      {activeTab.includes('Eth') ? 'ETH' : 'stETH'}
+            ) : (
+              <>
+                <div className={styles.tabContainer}>
+                  <button 
+                    onClick={() => setActiveTab('depositEth')} 
+                    className={`${styles.tabButton} ${activeTab === 'depositEth' ? styles.tabButtonActive : ''}`}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{
+                      marginRight: '8px', 
+                      color: activeTab === 'depositEth' ? '#00A3FF' : '#666666',
+                      transition: 'color 0.2s ease'
+                    }}>
+                      <path d="M12 4V20M12 20L6 14M12 20L18 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    Deposit ETH
+                  </button>
+                  <button 
+                    onClick={() => setActiveTab('depositSteth')} 
+                    className={`${styles.tabButton} ${activeTab === 'depositSteth' ? styles.tabButtonActive : ''}`}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{
+                      marginRight: '8px', 
+                      color: activeTab === 'depositSteth' ? '#00A3FF' : '#666666',
+                      transition: 'color 0.2s ease'
+                    }}>
+                      <path d="M12 4V20M12 20L6 14M12 20L18 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    Deposit stETH
+                  </button>
+                  <button 
+                    onClick={() => setActiveTab('withdrawEth')} 
+                    className={`${styles.tabButton} ${activeTab === 'withdrawEth' ? styles.tabButtonActive : ''}`}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{
+                      marginRight: '8px', 
+                      color: activeTab === 'withdrawEth' ? '#00A3FF' : '#666666',
+                      transition: 'color 0.2s ease'
+                    }}>
+                      <path d="M12 20V4M12 4L6 10M12 4L18 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    Withdraw ETH
+                  </button>
+                  <button 
+                    onClick={() => setActiveTab('withdrawSteth')} 
+                    className={`${styles.tabButton} ${activeTab === 'withdrawSteth' ? styles.tabButtonActive : ''}`}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{
+                      marginRight: '8px', 
+                      color: activeTab === 'withdrawSteth' ? '#00A3FF' : '#666666',
+                      transition: 'color 0.2s ease'
+                    }}>
+                      <path d="M12 20V4M12 4L6 10M12 4L18 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    Withdraw stETH
+                  </button>
+                </div>
+
+                <div className={styles.swapCard}>
+                  <div className={styles.swapHeader}>
+                    <h2>
+                      {activeTab === 'depositEth' ? 'Deposit ETH' : 
+                       activeTab === 'depositSteth' ? 'Deposit stETH' :
+                       activeTab === 'withdrawEth' ? 'Withdraw ETH' : 'Withdraw stETH'}
+                    </h2>
+                    <div className={styles.tokenIcon}>
+                      {activeTab.includes('Eth') ? (
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M12 2L5 12L12 16L19 12L12 2Z" fill="#627EEA"/>
+                          <path d="M12 16V22L19 12L12 16Z" fill="#627EEA"/>
+                          <path d="M12 16V22L5 12L12 16Z" fill="#627EEA"/>
+                          <path d="M12 2V10L19 12L12 2Z" fill="#C5CAF7"/>
+                          <path d="M12 2V10L5 12L12 2Z" fill="#C5CAF7"/>
+                        </svg>
+                      ) : (
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M12 2L5 12L12 16L19 12L12 2Z" fill="#00A3FF"/>
+                          <path d="M12 16V22L19 12L12 16Z" fill="#00A3FF"/>
+                          <path d="M12 16V22L5 12L12 16Z" fill="#00A3FF"/>
+                          <path d="M12 2V10L19 12L12 2Z" fill="#8CD9FF"/>
+                          <path d="M12 2V10L5 12L12 2Z" fill="#8CD9FF"/>
+                        </svg>
+                      )}
                     </div>
                   </div>
-                  <div className={styles.balanceHint}>
-                    Balance: {/*You would add actual balance here*/}
+                  
+                  <div className={styles.swapBody}>
+                    <div className={styles.inputGroup}>
+                      <label htmlFor="amount" className={styles.formLabel}>
+                        Amount:
+                      </label>
+                      <div className={styles.amountInputContainer}>
+                        <input
+                          id="amount"
+                          type="text"
+                          value={amount}
+                          onChange={(e) => setAmount(e.target.value)}
+                          placeholder="0.0"
+                          className={styles.formInput}
+                        />
+                        <button 
+                          className={styles.maxButton}
+                          onClick={handleSetMaxAmount}
+                          type="button"
+                        >
+                          MAX
+                        </button>
+                        <div className={styles.currencyBadge}>
+                          {activeTab.includes('Eth') ? 'ETH' : 'stETH'}
+                        </div>
+                      </div>
+                      <div className={styles.balanceHint}>
+                        {activeTab.startsWith('deposit') ? 'Wallet Balance: ' : 'Contract Balance: '}
+                        <span>
+                        {activeTab === 'depositEth' ? 
+                          `${ethBalanceData ? parseFloat(formatEther(ethBalanceData.value)).toFixed(4) : '0.0000'} ETH` : 
+                        activeTab === 'depositSteth' ? 
+                          `${formattedStethBalance} stETH` :
+                          `${formattedContractBalance} ${activeTab.includes('Eth') ? 'ETH' : 'stETH'}`
+                        }
+                        </span>
+                      </div>
+                      
+                      {activeTab === 'depositSteth' && needsStethApproval() && (
+                        <div className={styles.infoMessage}>
+                          You need to approve stETH spending first. This will happen automatically when you click Deposit.
+                        </div>
+                      )}
+                      
+                      {activeTab === 'depositSteth' && isApproving && hash && (
+                        <div className={styles.infoMessage}>
+                          Approving stETH... 
+                          <a 
+                            href={`https://etherscan.io/tx/${hash}`} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className={styles.txLink}
+                          >
+                            View transaction: {formatTxHash(hash)}
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                    
+                    <button
+                      onClick={
+                        activeTab === 'depositEth' ? handleDepositEth : 
+                        activeTab === 'depositSteth' ? handleDepositSteth :
+                        activeTab === 'withdrawEth' ? handleWithdrawEth : handleWithdrawSteth
+                      }
+                      disabled={isButtonDisabled()}
+                      className={styles.actionButton}
+                    >
+                      {getActionButtonText()}
+                    </button>
+                    
+                    {error && (
+                      <div className={styles.errorMessage}>
+                        Error: {error.message}
+                      </div>
+                    )}
+                    
+                    {isConfirmed && (
+                      <div className={styles.successMessage}>
+                        {isApproving ? 'stETH approval' : activeTab.startsWith('deposit') ? 'Deposit' : 'Withdrawal'} successful!
+                      </div>
+                    )}
                   </div>
                 </div>
-                
-                <button
-                  onClick={
-                    activeTab === 'depositEth' ? handleDepositEth : 
-                    activeTab === 'depositSteth' ? handleDepositSteth :
-                    activeTab === 'withdrawEth' ? handleWithdrawEth : handleWithdrawSteth
-                  }
-                  disabled={!amount || isPending || isConfirming}
-                  className={styles.actionButton}
-                >
-                  {isPending ? 'Confirming...' : isConfirming ? 'Processing...' : 
-                   activeTab.startsWith('deposit') ? 'Deposit' : 'Withdraw'}
-                </button>
-                
-                {error && (
-                  <div className={styles.errorMessage}>
-                    Error: {error.message}
-                  </div>
-                )}
-                
-                {isConfirmed && (
-                  <div className={styles.successMessage}>
-                    {activeTab.startsWith('deposit') ? 'Deposit' : 'Withdrawal'} successful!
-                  </div>
-                )}
-              </div>
-            </div>
+              </>
+            )}
           </>
         )}
       </main>

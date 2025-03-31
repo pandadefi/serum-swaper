@@ -4,6 +4,9 @@ export const SWAPPER_CONTRACT_ADDRESS = (process.env.NEXT_PUBLIC_SWAPPER_CONTRAC
 // Lido Withdrawal NFT contract address
 export const LIDO_WITHDRAWAL_NFT_ADDRESS = '0x889edc2edab5f40e902b864ad4d7ade8e412f9b1' as `0x${string}`;
 
+// Lido stETH Token address (Ethereum Mainnet)
+export const STETH_ADDRESS = '0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84' as `0x${string}`;
+
 // Swapper contract ABI (just the functions we need)
 export const SWAPPER_ABI = [
   {
@@ -76,6 +79,27 @@ export const SWAPPER_ABI = [
     stateMutability: 'nonpayable',
     type: 'function',
   },
+  {
+    inputs: [{ internalType: 'address', name: 'user', type: 'address' }],
+    name: 'getEthBalance',
+    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [{ internalType: 'address', name: 'user', type: 'address' }],
+    name: 'getStethBalance',
+    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [{ internalType: 'address', name: '', type: 'address' }],
+    name: 'balances',
+    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
+    stateMutability: 'view',
+    type: 'function',
+  }
 ] as const;
 
 // ERC721 minimal ABI for transferFrom function
@@ -89,6 +113,51 @@ export const ERC721_ABI = [
     name: 'transferFrom',
     outputs: [],
     stateMutability: 'nonpayable',
+    type: 'function',
+  }
+] as const;
+
+// ERC20 minimal ABI for balanceOf and other token functions
+export const ERC20_ABI = [
+  {
+    inputs: [{ internalType: 'address', name: 'account', type: 'address' }],
+    name: 'balanceOf',
+    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [
+      { internalType: 'address', name: 'spender', type: 'address' },
+      { internalType: 'uint256', name: 'amount', type: 'uint256' }
+    ],
+    name: 'approve',
+    outputs: [{ internalType: 'bool', name: '', type: 'bool' }],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      { internalType: 'address', name: 'owner', type: 'address' },
+      { internalType: 'address', name: 'spender', type: 'address' }
+    ],
+    name: 'allowance',
+    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [{ internalType: 'address', name: 'owner', type: 'address' }],
+    name: 'balanceOf',
+    outputs: [{ internalType: 'uint256', name: 'balance', type: 'uint256' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [],
+    name: 'decimals',
+    outputs: [{ internalType: 'uint8', name: '', type: 'uint8' }],
+    stateMutability: 'view',
     type: 'function',
   }
 ] as const; 

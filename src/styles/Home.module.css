@@ -267,6 +267,13 @@
   text-align: right;
   font-size: 0.9rem;
   color: #6c757d;
+  margin-top: 0.5rem;
+  font-weight: 500;
+}
+
+.balanceHint span {
+  color: #00A3FF;
+  font-weight: 600;
 }
 
 .tabContainer {
@@ -387,6 +394,54 @@
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.infoMessage {
+  color: #17a2b8;
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  border-radius: 8px;
+  background-color: rgba(23, 162, 184, 0.1);
+  font-size: 0.9rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.txLink {
+  color: #0056b3;
+  text-decoration: none;
+  font-weight: 600;
+  margin-left: 6px;
+  transition: color 0.15s ease;
+}
+
+.txLink:hover {
+  color: #003d7f;
+  text-decoration: underline;
+}
+
+.maxButton {
+  position: absolute;
+  right: 70px;
+  top: 50%;
+  transform: translateY(-50%);
+  background-color: #f1f3f5;
+  border: none;
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #00A3FF;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.maxButton:hover {
+  background-color: #e2f2ff;
 }
 
 @media (max-width: 600px) {
