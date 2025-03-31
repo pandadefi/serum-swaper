@@ -1,6 +1,6 @@
-# Serum Swapper Frontend
+# Staked steth Frontend
 
-This is a frontend application for interacting with the Serum Swapper contract. It allows the contract owner to withdraw ETH from the contract.
+This is a frontend application for interacting with the Staked steth contract. It allows the contract owner to withdraw ETH from the contract.
 
 ## Features
 

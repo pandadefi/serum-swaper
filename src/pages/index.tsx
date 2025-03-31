@@ -121,8 +121,8 @@ const Home: NextPage = () => {
   return (
     <div className={styles.container}>
       <Head>
-        <title>Serum Swapper</title>
-        <meta content="Serum Swapper - Deposit and withdraw assets" name="description" />
+        <title>Staked stETH</title>
+        <meta content="Staked stETH - Deposit and withdraw assets" name="description" />
         <link href="/favicon.ico" rel="icon" />
       </Head>
 
@@ -134,15 +134,15 @@ const Home: NextPage = () => {
         <div className={styles.logoContainer}>
           <div className={styles.logo}>
             <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="24" cy="24" r="24" fill="#0D76FC" />
+              <circle cx="24" cy="24" r="24" fill="#00A3FF" />
               <path d="M36 24C36 30.6274 30.6274 36 24 36C17.3726 36 12 30.6274 12 24C12 17.3726 17.3726 12 24 12C30.6274 12 36 17.3726 36 24Z" fill="white" />
-              <path d="M31 24C31 27.866 27.866 31 24 31C20.134 31 17 27.866 17 24C17 20.134 20.134 17 24 17C27.866 17 31 20.134 31 24Z" fill="#0D76FC" />
+              <path d="M31 24C31 27.866 27.866 31 24 31C20.134 31 17 27.866 17 24C17 20.134 20.134 17 24 17C27.866 17 31 20.134 31 24Z" fill="#00A3FF" />
               <path d="M24 28L28 24L24 20L20 24L24 28Z" fill="white" />
             </svg>
-            <h1 className={styles.title}>Serum Swapper</h1>
+            <h1 className={styles.title}>Staked stETH</h1>
           </div>
           <p className={styles.description}>
-            Deposit and withdraw assets from the Swapper contract
+            Deposit and withdraw assets from the Lido staking contract
           </p>
         </div>
 
@@ -319,10 +319,10 @@ const Home: NextPage = () => {
         <Link href="https://github.com/your-username/serum-swapper" target="_blank" rel="noopener noreferrer">
           <div className={styles.footerLogo}>
             <svg width="24" height="24" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="24" cy="24" r="24" fill="#0D76FC" opacity="0.5" />
-              <path d="M24 28L28 24L24 20L20 24L24 28Z" fill="#0D76FC" />
+              <circle cx="24" cy="24" r="24" fill="#00A3FF" opacity="0.5" />
+              <path d="M24 28L28 24L24 20L20 24L24 28Z" fill="#00A3FF" />
             </svg>
-            <span>Serum Swapper</span>
+            <span>Staked stETH</span>
           </div>
         </Link>
       </footer>
