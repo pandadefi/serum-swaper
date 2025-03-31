@@ -1,5 +1,5 @@
 // Swapper contract address
-export const SWAPPER_CONTRACT_ADDRESS = (process.env.NEXT_PUBLIC_SWAPPER_CONTRACT_ADDRESS || '0x404079604e7d565d068ac8e8eb213b4f05b174f4') as `0x${string}`;
+export const SWAPPER_CONTRACT_ADDRESS = (process.env.NEXT_PUBLIC_SWAPPER_CONTRACT_ADDRESS || '0x58d7DdD74292bD5faF69b0821abA4fd8f0bB9724') as `0x${string}`;
 
 // Lido Withdrawal NFT contract address
 export const LIDO_WITHDRAWAL_NFT_ADDRESS = '0x889edc2edab5f40e902b864ad4d7ade8e412f9b1' as `0x${string}`;

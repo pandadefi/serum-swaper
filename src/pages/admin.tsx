@@ -18,6 +18,7 @@ const Admin: NextPage = () => {
   const { address, isConnected } = useAccount();
   const [allowanceToSet, setAllowanceToSet] = useState<boolean>(true);
   const [checkedAllowance, setCheckedAllowance] = useState<boolean | null>(null);
+  const [addressToCheck, setAddressToCheck] = useState<`0x${string}` | undefined>(undefined);
 
   // Read contract to check if connected wallet is owner
   const { data: ownerAddress } = useReadContract({
@@ -25,6 +26,24 @@ const Admin: NextPage = () => {
     abi: SWAPPER_ABI,
     functionName: 'owner',
   });
+  
+  // Read allowance for an address when addressToCheck changes
+  const { data: allowanceData, isError: allowanceError } = useReadContract({
+    address: SWAPPER_CONTRACT_ADDRESS,
+    abi: SWAPPER_ABI,
+    functionName: 'allowed',
+    args: addressToCheck ? [addressToCheck] : undefined,
+    query: {
+      enabled: !!addressToCheck,
+    }
+  });
+  
+  // Update checkedAllowance when allowanceData changes
+  useEffect(() => {
+    if (addressToCheck && !allowanceError) {
+      setCheckedAllowance(!!allowanceData);
+    }
+  }, [allowanceData, addressToCheck, allowanceError]);
   
   // Write to contract
   const { data: hash, isPending, error, writeContract } = useWriteContract();
@@ -90,23 +109,14 @@ const Admin: NextPage = () => {
   };
 
   // Handle check address allowance
-  const handleCheckAllowance = async () => {
+  const handleCheckAllowance = () => {
     if (!checkAddress || !isAddress(checkAddress)) {
       alert('Please enter a valid Ethereum address');
       return;
     }
 
-    try {
-      const result = await fetch(`/api/checkAllowance?address=${checkAddress}`);
-      if (!result.ok) throw new Error('Failed to check allowance');
-      
-      const data = await result.json();
-      setCheckedAllowance(data.isAllowed);
-    } catch (err) {
-      console.error('Error checking allowance:', err);
-      // Skip the fallback to avoid the linter error
-      setCheckedAllowance(null);
-    }
+    // Set the address to check, which will trigger the useReadContract hook
+    setAddressToCheck(checkAddress as `0x${string}`);
   };
 
   // Handle set address allowance
@@ -118,7 +128,7 @@ const Admin: NextPage = () => {
         address: SWAPPER_CONTRACT_ADDRESS,
         abi: SWAPPER_ABI,
         functionName: 'allow',
-        args: [allowAddress, allowanceToSet],
+        args: [allowAddress as `0x${string}`, allowanceToSet],
       });
     } catch (err) {
       console.error('Error setting allowance:', err);
