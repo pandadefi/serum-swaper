@@ -123,7 +123,7 @@ const Home: NextPage = () => {
       <Head>
         <title>Staked stETH</title>
         <meta content="Staked stETH - Deposit and withdraw assets" name="description" />
-        <link href="/favicon.ico" rel="icon" />
+        <link href="/favicon.svg" rel="icon" type="image/svg+xml" />
       </Head>
 
       <main className={styles.main}>

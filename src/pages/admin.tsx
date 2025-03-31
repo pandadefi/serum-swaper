@@ -140,7 +140,7 @@ const Admin: NextPage = () => {
       <Head>
         <title>Admin - Staked stETH</title>
         <meta content="Admin functions for the Staked stETH contract" name="description" />
-        <link href="/favicon.ico" rel="icon" />
+        <link href="/favicon.svg" rel="icon" type="image/svg+xml" />
       </Head>
 
       <main className={styles.main}>
