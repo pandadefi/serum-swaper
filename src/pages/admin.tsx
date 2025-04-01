@@ -2,18 +2,6 @@ import { ConnectButton } from '@rainbow-me/rainbowkit';
 import type { NextPage } from 'next';
 import Head from 'next/head';
 import styles from '../styles/Home.module.css';
-import { useState, useEffect } from 'react';
-import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi';
-import { parseEther, encodeFunctionData, isAddress, formatEther } from 'viem';
-import { 
-  SWAPPER_CONTRACT_ADDRESS, 
-  SWAPPER_ABI, 
-  LIDO_WITHDRAWAL_NFT_ADDRESS, 
-  ERC721_ABI,
-  WETH_ADDRESS,
-  LIDO_WITHDRAWAL_QUEUE_ADDRESS,
-  LIDO_WITHDRAWAL_QUEUE_ABI
-} from '../constants';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 

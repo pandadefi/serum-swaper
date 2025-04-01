@@ -522,7 +522,7 @@ const AdminContent = () => {
                         wethBalance + 
                         withdrawalStatuses.reduce(
                           (acc, status) => acc + status.amountOfStETH,
-                          0n
+                          BigInt(0)
                         )
                       )} ETH`
                     ) : (
@@ -544,7 +544,7 @@ const AdminContent = () => {
                         (wethBalance + 
                         withdrawalStatuses.reduce(
                           (acc, status) => acc + status.amountOfStETH,
-                          0n
+                          BigInt(0)
                         )) - totalEth
                       )} ETH`
                     ) : (
