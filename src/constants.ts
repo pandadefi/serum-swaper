@@ -7,6 +7,12 @@ export const LIDO_WITHDRAWAL_NFT_ADDRESS = '0x889edc2edab5f40e902b864ad4d7ade8e4
 // Lido stETH Token address (Ethereum Mainnet)
 export const STETH_ADDRESS = '0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84' as `0x${string}`;
 
+// WETH Token address (Ethereum Mainnet)
+export const WETH_ADDRESS = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2' as `0x${string}`;
+
+// Lido Withdrawal Queue contract address
+export const LIDO_WITHDRAWAL_QUEUE_ADDRESS = '0x889edC2eDab5f40e902b864aD4d7AdE8E412F9B1' as `0x${string}`;
+
 // Swapper contract ABI (just the functions we need)
 export const SWAPPER_ABI = [
   {
@@ -99,6 +105,27 @@ export const SWAPPER_ABI = [
     outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
     stateMutability: 'view',
     type: 'function',
+  },
+  {
+    inputs: [{ internalType: 'address', name: '_owner', type: 'address' }],
+    name: 'getWithdrawalRequests',
+    outputs: [
+      {
+        components: [
+          { internalType: 'uint256', name: 'requestId', type: 'uint256' },
+          { internalType: 'uint256', name: 'amountOfStETH', type: 'uint256' },
+          { internalType: 'uint256', name: 'amountOfShares', type: 'uint256' },
+          { internalType: 'address', name: 'owner', type: 'address' },
+          { internalType: 'uint256', name: 'timestamp', type: 'uint256' },
+          { internalType: 'string', name: 'status', type: 'string' }
+        ],
+        internalType: 'struct IWithdrawalQueueERC721.WithdrawalRequestStatus[]',
+        name: '',
+        type: 'tuple[]'
+      }
+    ],
+    stateMutability: 'view',
+    type: 'function'
   }
 ] as const;
 
@@ -159,5 +186,30 @@ export const ERC20_ABI = [
     outputs: [{ internalType: 'uint8', name: '', type: 'uint8' }],
     stateMutability: 'view',
     type: 'function',
+  }
+] as const;
+
+// Lido Withdrawal Queue ABI
+export const LIDO_WITHDRAWAL_QUEUE_ABI = [
+  {
+    inputs: [{ internalType: 'address', name: '_owner', type: 'address' }],
+    name: 'getWithdrawalRequests',
+    outputs: [
+      {
+        components: [
+          { internalType: 'uint256', name: 'requestId', type: 'uint256' },
+          { internalType: 'uint256', name: 'amountOfStETH', type: 'uint256' },
+          { internalType: 'uint256', name: 'amountOfShares', type: 'uint256' },
+          { internalType: 'address', name: 'owner', type: 'address' },
+          { internalType: 'uint256', name: 'timestamp', type: 'uint256' },
+          { internalType: 'string', name: 'status', type: 'string' }
+        ],
+        internalType: 'struct IWithdrawalQueueERC721.WithdrawalRequestStatus[]',
+        name: '',
+        type: 'tuple[]'
+      }
+    ],
+    stateMutability: 'view',
+    type: 'function'
   }
 ] as const; 
