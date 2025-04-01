@@ -173,6 +173,22 @@ const AdminContent = () => {
     }
   });
 
+  // Read totalEth from contract
+  const { data: totalEth, isError: totalEthError } = useReadContract({
+    address: SWAPPER_CONTRACT_ADDRESS,
+    abi: [{
+      inputs: [],
+      name: "totalEth",
+      outputs: [{ type: "uint256", name: "" }],
+      stateMutability: "view",
+      type: "function"
+    }],
+    functionName: 'totalEth',
+    query: {
+      enabled: !!SWAPPER_CONTRACT_ADDRESS,
+    }
+  });
+
   // Handle withdraw
   const handleWithdraw = async () => {
     if (!amount || !isOwner) return;
@@ -269,6 +285,12 @@ const AdminContent = () => {
     <>
       <div className={styles.tabContainer}>
         <button 
+          onClick={() => setActiveTab('balances')} 
+          className={`${styles.tabButton} ${activeTab === 'balances' ? styles.tabButtonActive : ''}`}
+        >
+          Balances & Requests
+        </button>
+        <button 
           onClick={() => setActiveTab('withdraw')} 
           className={`${styles.tabButton} ${activeTab === 'withdraw' ? styles.tabButtonActive : ''}`}
         >
@@ -285,12 +307,6 @@ const AdminContent = () => {
           className={`${styles.tabButton} ${activeTab === 'permissions' ? styles.tabButtonActive : ''}`}
         >
           Permissions
-        </button>
-        <button 
-          onClick={() => setActiveTab('balances')} 
-          className={`${styles.tabButton} ${activeTab === 'balances' ? styles.tabButtonActive : ''}`}
-        >
-          Balances & Requests
         </button>
       </div>
 
@@ -446,8 +462,14 @@ const AdminContent = () => {
             <div style={{ marginTop: '1.5rem' }}>
               <div style={{ marginBottom: '2rem' }}>
                 <h3 style={{ fontSize: '1.1rem', marginBottom: '1rem' }}>Contract Balances</h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  <div>
+                <div style={{ 
+                  border: '1px solid #eaeaea',
+                  borderRadius: '8px',
+                  padding: '1rem',
+                  backgroundColor: '#f9f9f9',
+                  marginBottom: '1rem'
+                }}>
+                  <div style={{ marginBottom: '0.5rem' }}>
                     <span style={{ fontWeight: 'bold' }}>WETH Balance:</span>{' '}
                     {wethError ? (
                       <span style={{ color: '#dc3545' }}>Error loading WETH balance</span>
@@ -463,6 +485,68 @@ const AdminContent = () => {
                       <span style={{ color: '#dc3545' }}>Error loading stETH balance</span>
                     ) : stethBalance ? (
                       `${formatEther(stethBalance)} stETH`
+                    ) : (
+                      'Loading...'
+                    )}
+                  </div>
+                </div>
+
+                <div style={{ 
+                  border: '1px solid #eaeaea',
+                  borderRadius: '8px',
+                  padding: '1rem',
+                  backgroundColor: '#f9f9f9',
+                  marginBottom: '1rem'
+                }}>
+                  <div style={{ marginBottom: '0.5rem', fontSize: '1.1rem' }}>
+                    <span style={{ fontWeight: 'bold' }}>Contract Total ETH:</span>{' '}
+                    {totalEthError ? (
+                      <span style={{ color: '#dc3545' }}>Error loading total ETH</span>
+                    ) : totalEth ? (
+                      `${formatEther(totalEth)} ETH`
+                    ) : (
+                      'Loading...'
+                    )}
+                  </div>
+                  <div style={{ 
+                    marginTop: '1rem',
+                    paddingTop: '1rem',
+                    borderTop: '1px solid #eaeaea',
+                    fontSize: '1.1rem'
+                  }}>
+                    <span style={{ fontWeight: 'bold' }}>Total Assets:</span>{' '}
+                    {totalEthError || wethError || withdrawalStatusError ? (
+                      <span style={{ color: '#dc3545' }}>Error loading balances</span>
+                    ) : totalEth && wethBalance && withdrawalStatuses ? (
+                      `${formatEther(
+                        wethBalance + 
+                        withdrawalStatuses.reduce(
+                          (acc, status) => acc + status.amountOfStETH,
+                          0n
+                        )
+                      )} ETH`
+                    ) : (
+                      'Loading...'
+                    )}
+                  </div>
+                  <div style={{ 
+                    marginTop: '1rem',
+                    paddingTop: '1rem',
+                    borderTop: '1px solid #eaeaea',
+                    fontSize: '1.1rem',
+                    color: '#28a745'
+                  }}>
+                    <span style={{ fontWeight: 'bold' }}>Total Gains:</span>{' '}
+                    {totalEthError || wethError || withdrawalStatusError ? (
+                      <span style={{ color: '#dc3545' }}>Error loading balances</span>
+                    ) : totalEth && wethBalance && withdrawalStatuses ? (
+                      `${formatEther(
+                        (wethBalance + 
+                        withdrawalStatuses.reduce(
+                          (acc, status) => acc + status.amountOfStETH,
+                          0n
+                        )) - totalEth
+                      )} ETH`
                     ) : (
                       'Loading...'
                     )}
