@@ -27,7 +27,7 @@ This is a frontend application for interacting with the Staked steth contract. I
 3. Create a `.env.local` file with the following content:
    ```
    NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID=your_project_id_here
-   NEXT_PUBLIC_SWAPPER_CONTRACT_ADDRESS=0x58d7DdD74292bD5faF69b0821abA4fd8f0bB9724
+   NEXT_PUBLIC_SWAPPER_CONTRACT_ADDRESS=0xc32B5d94C1f27E1f02a262a75e10169e71ca7d5D
    ```
 4. Start the development server:
    ```bash
