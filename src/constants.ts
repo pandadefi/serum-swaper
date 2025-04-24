@@ -1,5 +1,11 @@
-// Swapper contract address
-export const SWAPPER_CONTRACT_ADDRESS = (process.env.NEXT_PUBLIC_SWAPPER_CONTRACT_ADDRESS || '0xc32B5d94C1f27E1f02a262a75e10169e71ca7d5D') as `0x${string}`;
+// Swapper contract addresses
+export const SWAPPER_CONTRACT_ADDRESSES: `0x${string}`[] = [
+  '0xc32B5d94C1f27E1f02a262a75e10169e71ca7d5D' as `0x${string}`,
+  '0xd23cb9befab3030ddbb0347ec3dabcb384d66ee2' as `0x${string}`
+];
+
+// Default swapper contract address (for backward compatibility)
+export const SWAPPER_CONTRACT_ADDRESS = SWAPPER_CONTRACT_ADDRESSES[0];
 
 // Lido Withdrawal NFT contract address
 export const LIDO_WITHDRAWAL_NFT_ADDRESS = '0x889edc2edab5f40e902b864ad4d7ade8e412f9b1' as `0x${string}`;

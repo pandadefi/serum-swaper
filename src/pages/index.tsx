@@ -5,7 +5,7 @@ import styles from '../styles/Home.module.css';
 import { useState, useEffect } from 'react';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract, useBalance } from 'wagmi';
 import { parseEther, formatEther } from 'viem';
-import { SWAPPER_CONTRACT_ADDRESS, SWAPPER_ABI, STETH_ADDRESS, ERC20_ABI } from '../constants';
+import { SWAPPER_CONTRACT_ADDRESSES, SWAPPER_ABI, STETH_ADDRESS, ERC20_ABI } from '../constants';
 import Link from 'next/link';
 
 const Home: NextPage = () => {
@@ -15,12 +15,56 @@ const Home: NextPage = () => {
   const [activeTab, setActiveTab] = useState<'depositEth' | 'depositSteth' | 'withdrawEth' | 'withdrawSteth'>('depositEth');
   const [isMounted, setIsMounted] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
+  const [activeContract, setActiveContract] = useState<`0x${string}`>(SWAPPER_CONTRACT_ADDRESSES[0]);
+  const [isCheckingContracts, setIsCheckingContracts] = useState(false);
   const { address, isConnected } = useAccount();
   
   // Set mounted state for client-side rendering
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  // Find the first contract that the user is allowed to use
+  useEffect(() => {
+    const findUsableContract = async () => {
+      if (!address || !isConnected) return;
+      
+      setIsCheckingContracts(true);
+      
+      for (const contractAddress of SWAPPER_CONTRACT_ADDRESSES) {
+        try {
+          // Check if the user is allowed to use this contract
+          const isAllowedResponse = await fetch('/api/checkAllowance', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              address,
+              contractAddress,
+            }),
+          });
+          
+          const { isAllowed } = await isAllowedResponse.json();
+          
+          if (isAllowed) {
+            setActiveContract(contractAddress);
+            setIsAllowed(true);
+            setIsCheckingContracts(false);
+            return;
+          }
+        } catch (error) {
+          console.error(`Error checking contract ${contractAddress}:`, error);
+        }
+      }
+      
+      // If no contract is found where the user is allowed, keep the first one as default
+      setIsAllowed(false);
+      setIsCheckingContracts(false);
+    };
+    
+    findUsableContract();
+  }, [address, isConnected]);
   
   // Fetch user's ETH balance in wallet
   const { data: ethBalanceData, refetch: refetchEthBalance } = useBalance({
@@ -46,20 +90,20 @@ const Home: NextPage = () => {
     address: STETH_ADDRESS,
     abi: ERC20_ABI,
     functionName: 'allowance',
-    args: [address || '0x0000000000000000000000000000000000000000', SWAPPER_CONTRACT_ADDRESS],
+    args: [address || '0x0000000000000000000000000000000000000000', activeContract],
     query: {
-      enabled: !!address,
+      enabled: !!address && !!activeContract,
     },
   });
   
   // Fetch user's balances in contract directly using the balances mapping
   const { data: contractBalanceData, refetch: refetchContractBalance } = useReadContract({
-    address: SWAPPER_CONTRACT_ADDRESS,
+    address: activeContract,
     abi: SWAPPER_ABI,
     functionName: 'balances',
     args: [address || '0x0000000000000000000000000000000000000000'],
     query: {
-      enabled: !!address,
+      enabled: !!address && !!activeContract,
     },
   });
   
@@ -75,19 +119,11 @@ const Home: NextPage = () => {
   
   // Read contract to check if connected wallet is owner
   const { data: ownerAddress } = useReadContract({
-    address: SWAPPER_CONTRACT_ADDRESS,
+    address: activeContract,
     abi: SWAPPER_ABI,
     functionName: 'owner',
-  });
-  
-  // Check if user is allowed
-  const { data: isAllowedData } = useReadContract({
-    address: SWAPPER_CONTRACT_ADDRESS,
-    abi: SWAPPER_ABI,
-    functionName: 'allowed',
-    args: [address || '0x0000000000000000000000000000000000000000'],
     query: {
-      enabled: !!address,
+      enabled: !!activeContract,
     },
   });
   
@@ -98,11 +134,7 @@ const Home: NextPage = () => {
     } else {
       setIsOwner(false);
     }
-    
-    if (isAllowedData !== undefined) {
-      setIsAllowed(isAllowedData);
-    }
-  }, [address, ownerAddress, isAllowedData]);
+  }, [address, ownerAddress]);
   
   // Write to contract
   const { data: hash, isPending, error, writeContract } = useWriteContract();
@@ -139,7 +171,7 @@ const Home: NextPage = () => {
           address: STETH_ADDRESS,
           abi: ERC20_ABI,
           functionName: 'approve',
-          args: [SWAPPER_CONTRACT_ADDRESS, parseEther('1000000000')], // Very large allowance
+          args: [activeContract, parseEther('1000000000')], // Very large allowance
         });
         return false; // Return false to indicate approval is in progress
       } catch (err) {
@@ -158,7 +190,7 @@ const Home: NextPage = () => {
     
     try {
       writeContract({
-        address: SWAPPER_CONTRACT_ADDRESS,
+        address: activeContract,
         abi: SWAPPER_ABI,
         functionName: 'depositEth',
         value: parseEther(amount),
@@ -188,7 +220,7 @@ const Home: NextPage = () => {
       
       // If we have allowance, proceed with deposit
       writeContract({
-        address: SWAPPER_CONTRACT_ADDRESS,
+        address: activeContract,
         abi: SWAPPER_ABI,
         functionName: 'depositSteth',
         args: [amountBigInt],
@@ -204,7 +236,7 @@ const Home: NextPage = () => {
     
     try {
       writeContract({
-        address: SWAPPER_CONTRACT_ADDRESS,
+        address: activeContract,
         abi: SWAPPER_ABI,
         functionName: 'withdrawEth',
         args: [parseEther(amount)],
@@ -220,7 +252,7 @@ const Home: NextPage = () => {
     
     try {
       writeContract({
-        address: SWAPPER_CONTRACT_ADDRESS,
+        address: activeContract,
         abi: SWAPPER_ABI,
         functionName: 'withdrawSteth',
         args: [parseEther(amount)],
@@ -332,22 +364,31 @@ const Home: NextPage = () => {
               </div>
             ) : !isAllowed ? (
               <div className={styles.card} style={{ textAlign: 'center', borderColor: '#dc3545' }}>
-                <p style={{ color: '#dc3545', marginBottom: '1rem' }}>
-                  Your address is not allowed to use this contract.
-                </p>
-                <p>
-                  If you believe this is an error, please contact the contract owner or check your address in the{' '}
-                  {isOwner ? (
-                    <Link href="/admin" style={{ fontWeight: 500 }}>
-                      Admin Panel
-                    </Link>
-                  ) : (
-                    'Admin Panel'
-                  )}.
-                </p>
-                <div style={{ marginTop: '1rem', fontSize: '0.9rem', color: '#6c757d' }}>
-                  Connected address: {address}
-                </div>
+                {isCheckingContracts ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+                    <div className={styles.loadingSpinner}></div>
+                    <p>Checking available contracts...</p>
+                  </div>
+                ) : (
+                  <>
+                    <p style={{ color: '#dc3545', marginBottom: '1rem' }}>
+                      Your address is not allowed to use this contract.
+                    </p>
+                    <p>
+                      If you believe this is an error, please contact the contract owner or check your address in the{' '}
+                      {isOwner ? (
+                        <Link href="/admin" style={{ fontWeight: 500 }}>
+                          Admin Panel
+                        </Link>
+                      ) : (
+                        'Admin Panel'
+                      )}.
+                    </p>
+                    <div style={{ marginTop: '1rem', fontSize: '0.9rem', color: '#6c757d' }}>
+                      Connected address: {address}
+                    </div>
+                  </>
+                )}
               </div>
             ) : (
               <>

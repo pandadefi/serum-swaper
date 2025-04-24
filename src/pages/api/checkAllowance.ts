@@ -1,40 +1,61 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { createPublicClient, http } from 'viem';
 import { mainnet } from 'viem/chains';
-import { SWAPPER_CONTRACT_ADDRESS, SWAPPER_ABI } from '../../constants';
+import { SWAPPER_ABI } from '../../constants';
+
+// Create a public client for reading from the blockchain
+const publicClient = createPublicClient({
+  chain: mainnet,
+  transport: http(),
+});
+
+type RequestData = {
+  address: string;
+  contractAddress: `0x${string}`;
+};
 
 type ResponseData = {
   isAllowed: boolean;
-  address?: string;
   error?: string;
-}
+};
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse<ResponseData>
 ) {
+  // Only accept POST requests
+  if (req.method !== 'POST') {
+    return res.status(405).json({ isAllowed: false, error: 'Method not allowed' });
+  }
+
   try {
-    const { address } = req.query;
-    
-    if (!address || typeof address !== 'string') {
-      return res.status(400).json({ isAllowed: false, error: 'Invalid address parameter' });
+    const { address, contractAddress } = req.body as RequestData;
+
+    // Validate input
+    if (!address || !contractAddress) {
+      return res.status(400).json({ isAllowed: false, error: 'Missing address or contractAddress' });
     }
 
-    const publicClient = createPublicClient({
-      chain: mainnet,
-      transport: http(process.env.NEXT_PUBLIC_RPC_URL || 'https://eth.llamarpc.com')
-    });
-
+    // Check if the user is allowed to use the contract
     const isAllowed = await publicClient.readContract({
-      address: SWAPPER_CONTRACT_ADDRESS,
+      address: contractAddress,
       abi: SWAPPER_ABI,
       functionName: 'allowed',
-      args: [address as `0x${string}`],
+      args: [address],
     });
 
-    return res.status(200).json({ isAllowed: !!isAllowed, address });
+    // Check if the user is the owner (owners are always allowed)
+    const ownerAddress = await publicClient.readContract({
+      address: contractAddress,
+      abi: SWAPPER_ABI,
+      functionName: 'owner',
+    });
+
+    const isOwner = ownerAddress.toLowerCase() === address.toLowerCase();
+
+    return res.status(200).json({ isAllowed: isAllowed || isOwner });
   } catch (error) {
-    console.error('API error:', error);
+    console.error('Error checking allowance:', error);
     return res.status(500).json({ isAllowed: false, error: 'Failed to check allowance' });
   }
 } 
