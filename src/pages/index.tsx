@@ -3,7 +3,7 @@ import type { NextPage } from 'next';
 import Head from 'next/head';
 import styles from '../styles/Home.module.css';
 import { useState, useEffect } from 'react';
-import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract, useBalance } from 'wagmi';
+import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract, useBalance, useReadContracts } from 'wagmi';
 import { parseEther, formatEther } from 'viem';
 import { SWAPPER_CONTRACT_ADDRESSES, SWAPPER_ABI, STETH_ADDRESS, ERC20_ABI } from '../constants';
 import Link from 'next/link';
@@ -24,47 +24,65 @@ const Home: NextPage = () => {
     setIsMounted(true);
   }, []);
 
-  // Find the first contract that the user is allowed to use
-  useEffect(() => {
-    const findUsableContract = async () => {
-      if (!address || !isConnected) return;
-      
-      setIsCheckingContracts(true);
-      
-      for (const contractAddress of SWAPPER_CONTRACT_ADDRESSES) {
-        try {
-          // Check if the user is allowed to use this contract
-          const isAllowedResponse = await fetch('/api/checkAllowance', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              address,
-              contractAddress,
-            }),
-          });
-          
-          const { isAllowed } = await isAllowedResponse.json();
-          
-          if (isAllowed) {
-            setActiveContract(contractAddress);
-            setIsAllowed(true);
-            setIsCheckingContracts(false);
-            return;
-          }
-        } catch (error) {
-          console.error(`Error checking contract ${contractAddress}:`, error);
-        }
+  // Check permissions across all swapper contracts
+  const { data: contractsData, isLoading: isLoadingContractsData } = useReadContracts({
+    contracts: SWAPPER_CONTRACT_ADDRESSES.flatMap(contractAddress => [
+      // Check if user is allowed
+      {
+        address: contractAddress,
+        abi: SWAPPER_ABI,
+        functionName: 'allowed',
+        args: [address || '0x0000000000000000000000000000000000000000'],
+      },
+      // Check contract owner
+      {
+        address: contractAddress,
+        abi: SWAPPER_ABI,
+        functionName: 'owner',
       }
-      
-      // If no contract is found where the user is allowed, keep the first one as default
-      setIsAllowed(false);
-      setIsCheckingContracts(false);
-    };
+    ]),
+    query: {
+      enabled: !!address && isConnected,
+    },
+  });
+
+  // Find the first usable contract
+  useEffect(() => {
+    if (!contractsData || !address) return;
     
-    findUsableContract();
-  }, [address, isConnected]);
+    setIsCheckingContracts(true);
+    
+    // Process the data to find a usable contract
+    for (let i = 0; i < SWAPPER_CONTRACT_ADDRESSES.length; i++) {
+      // Index for the allowed status and owner in the contractsData array
+      const allowedIndex = i * 2;
+      const ownerIndex = i * 2 + 1;
+      
+      // Check if this contract allows the user or if user is owner
+      const isContractAllowed = contractsData[allowedIndex].result;
+      const contractOwner = contractsData[ownerIndex].result as `0x${string}`;
+      const isContractOwner = contractOwner?.toLowerCase() === address.toLowerCase();
+      
+      if (isContractAllowed || isContractOwner) {
+        setActiveContract(SWAPPER_CONTRACT_ADDRESSES[i]);
+        setIsAllowed(true);
+        setIsOwner(isContractOwner);
+        setIsCheckingContracts(false);
+        return;
+      }
+    }
+    
+    // If no contracts are usable, keep the first one and mark as not allowed
+    setIsAllowed(false);
+    setIsCheckingContracts(false);
+  }, [contractsData, address]);
+  
+  // Update isCheckingContracts based on loading state
+  useEffect(() => {
+    if (isConnected && address) {
+      setIsCheckingContracts(isLoadingContractsData);
+    }
+  }, [isLoadingContractsData, isConnected, address]);
   
   // Fetch user's ETH balance in wallet
   const { data: ethBalanceData, refetch: refetchEthBalance } = useBalance({
@@ -116,25 +134,6 @@ const Home: NextPage = () => {
   const formattedContractBalance = contractBalanceData ? 
     parseFloat(formatEther(contractBalanceData)).toFixed(4) : 
     '0.0000';
-  
-  // Read contract to check if connected wallet is owner
-  const { data: ownerAddress } = useReadContract({
-    address: activeContract,
-    abi: SWAPPER_ABI,
-    functionName: 'owner',
-    query: {
-      enabled: !!activeContract,
-    },
-  });
-  
-  // Set user state based on contract data
-  useEffect(() => {
-    if (address && ownerAddress) {
-      setIsOwner(address.toLowerCase() === ownerAddress.toLowerCase());
-    } else {
-      setIsOwner(false);
-    }
-  }, [address, ownerAddress]);
   
   // Write to contract
   const { data: hash, isPending, error, writeContract } = useWriteContract();

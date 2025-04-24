@@ -1,14 +1,13 @@
 import { useState, useEffect } from 'react';
-import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi';
+import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract, useReadContracts } from 'wagmi';
 import { parseEther, encodeFunctionData, isAddress, formatEther } from 'viem';
 import { 
-  SWAPPER_CONTRACT_ADDRESS, 
+  SWAPPER_CONTRACT_ADDRESSES, 
   SWAPPER_ABI, 
   LIDO_WITHDRAWAL_NFT_ADDRESS, 
   ERC721_ABI,
   WETH_ADDRESS,
   LIDO_WITHDRAWAL_QUEUE_ADDRESS,
-  LIDO_WITHDRAWAL_QUEUE_ABI
 } from '../constants';
 import styles from '../styles/Home.module.css';
 
@@ -32,22 +31,59 @@ const AdminContent = () => {
   const [allowanceToSet, setAllowanceToSet] = useState<boolean>(true);
   const [checkedAllowance, setCheckedAllowance] = useState<boolean | null>(null);
   const [addressToCheck, setAddressToCheck] = useState<`0x${string}` | undefined>(undefined);
+  const [activeContract, setActiveContract] = useState<`0x${string}`>(SWAPPER_CONTRACT_ADDRESSES[0]);
+  const [isCheckingOwnership, setIsCheckingOwnership] = useState(true);
 
-  // Read contract to check if connected wallet is owner
-  const { data: ownerAddress } = useReadContract({
-    address: SWAPPER_CONTRACT_ADDRESS,
-    abi: SWAPPER_ABI,
-    functionName: 'owner',
+  // Check ownership across all contracts
+  const { data: ownershipData, isLoading: isLoadingOwnership } = useReadContracts({
+    contracts: SWAPPER_CONTRACT_ADDRESSES.map(contractAddress => ({
+      address: contractAddress,
+      abi: SWAPPER_ABI,
+      functionName: 'owner',
+    })),
+    query: {
+      enabled: !!address && isConnected,
+    },
   });
+
+  // Find contracts where the connected wallet is owner
+  useEffect(() => {
+    if (!ownershipData || !address) {
+      setIsOwner(false);
+      return;
+    }
+    
+    setIsCheckingOwnership(false);
+    
+    // Check if user is owner of any contract
+    const ownedContractIndex = ownershipData.findIndex(data => {
+      const owner = data.result as `0x${string}`;
+      return owner?.toLowerCase() === address.toLowerCase();
+    });
+    
+    if (ownedContractIndex >= 0) {
+      setIsOwner(true);
+      setActiveContract(SWAPPER_CONTRACT_ADDRESSES[ownedContractIndex]);
+    } else {
+      setIsOwner(false);
+    }
+  }, [ownershipData, address]);
+
+  // Update loading state
+  useEffect(() => {
+    if (isConnected && address) {
+      setIsCheckingOwnership(isLoadingOwnership);
+    }
+  }, [isLoadingOwnership, isConnected, address]);
   
   // Read allowance for an address when addressToCheck changes
   const { data: allowanceData, isError: allowanceError } = useReadContract({
-    address: SWAPPER_CONTRACT_ADDRESS,
+    address: activeContract,
     abi: SWAPPER_ABI,
     functionName: 'allowed',
     args: addressToCheck ? [addressToCheck] : undefined,
     query: {
-      enabled: !!addressToCheck,
+      enabled: !!addressToCheck && !!activeContract,
     }
   });
   
@@ -65,23 +101,14 @@ const AdminContent = () => {
   const { isLoading: isConfirming, isSuccess: isConfirmed } = 
     useWaitForTransactionReceipt({ hash });
 
-  // Check if connected wallet is owner
-  useEffect(() => {
-    if (address && ownerAddress) {
-      setIsOwner(address.toLowerCase() === ownerAddress.toLowerCase());
-    } else {
-      setIsOwner(false);
-    }
-  }, [address, ownerAddress]);
-
   // Read ETH balance from the balances mapping
   const { data: ethBalance, isError: ethError } = useReadContract({
-    address: SWAPPER_CONTRACT_ADDRESS,
+    address: activeContract,
     abi: SWAPPER_ABI,
     functionName: 'balances',
-    args: [SWAPPER_CONTRACT_ADDRESS],
+    args: [activeContract],
     query: {
-      enabled: !!SWAPPER_CONTRACT_ADDRESS,
+      enabled: !!activeContract,
     }
   });
 
@@ -98,9 +125,9 @@ const AdminContent = () => {
       }
     ],
     functionName: 'balanceOf',
-    args: [SWAPPER_CONTRACT_ADDRESS],
+    args: [activeContract],
     query: {
-      enabled: !!SWAPPER_CONTRACT_ADDRESS,
+      enabled: !!activeContract,
     }
   });
 
@@ -117,9 +144,9 @@ const AdminContent = () => {
       }
     ],
     functionName: 'balanceOf',
-    args: [SWAPPER_CONTRACT_ADDRESS],
+    args: [activeContract],
     query: {
-      enabled: !!WETH_ADDRESS && !!SWAPPER_CONTRACT_ADDRESS,
+      enabled: !!WETH_ADDRESS && !!activeContract,
     }
   });
 
@@ -136,9 +163,9 @@ const AdminContent = () => {
       }
     ],
     functionName: 'getWithdrawalRequests',
-    args: [SWAPPER_CONTRACT_ADDRESS],
+    args: [activeContract],
     query: {
-      enabled: !!LIDO_WITHDRAWAL_QUEUE_ADDRESS && !!SWAPPER_CONTRACT_ADDRESS,
+      enabled: !!LIDO_WITHDRAWAL_QUEUE_ADDRESS && !!activeContract,
     }
   });
 
@@ -175,7 +202,7 @@ const AdminContent = () => {
 
   // Read totalEth from contract
   const { data: totalEth, isError: totalEthError } = useReadContract({
-    address: SWAPPER_CONTRACT_ADDRESS,
+    address: activeContract,
     abi: [{
       inputs: [],
       name: "totalEth",
@@ -185,7 +212,7 @@ const AdminContent = () => {
     }],
     functionName: 'totalEth',
     query: {
-      enabled: !!SWAPPER_CONTRACT_ADDRESS,
+      enabled: !!activeContract,
     }
   });
 
@@ -195,7 +222,7 @@ const AdminContent = () => {
     
     try {
       writeContract({
-        address: SWAPPER_CONTRACT_ADDRESS,
+        address: activeContract,
         abi: SWAPPER_ABI,
         functionName: 'withdraw',
         args: [parseEther(amount)],
@@ -215,14 +242,14 @@ const AdminContent = () => {
         abi: ERC721_ABI,
         functionName: 'transferFrom',
         args: [
-          SWAPPER_CONTRACT_ADDRESS, // from (the Swapper contract)
+          activeContract, // from (the Swapper contract)
           address, // to (the current user/caller)
           BigInt(tokenId) // tokenId
         ]
       });
 
       writeContract({
-        address: SWAPPER_CONTRACT_ADDRESS,
+        address: activeContract,
         abi: SWAPPER_ABI,
         functionName: 'execute',
         args: [
@@ -253,7 +280,7 @@ const AdminContent = () => {
     
     try {
       writeContract({
-        address: SWAPPER_CONTRACT_ADDRESS,
+        address: activeContract,
         abi: SWAPPER_ABI,
         functionName: 'allow',
         args: [allowAddress as `0x${string}`, allowanceToSet],
@@ -263,38 +290,81 @@ const AdminContent = () => {
     }
   };
 
+  // Contract selector component
+  const ContractSelector = () => {
+    if (SWAPPER_CONTRACT_ADDRESSES.length <= 1) return null;
+    
+    return (
+      <div className={styles.contractSelector}>
+        <label className={styles.formLabel}>Select Contract:</label>
+        <select 
+          value={activeContract}
+          onChange={(e) => setActiveContract(e.target.value as `0x${string}`)}
+          className={styles.formInput}
+          style={{ marginBottom: '1.5rem' }}
+        >
+          {SWAPPER_CONTRACT_ADDRESSES.map((contract, index) => (
+            <option key={contract} value={contract}>
+              {contract} {index === 0 ? '(Primary)' : `(Contract ${index + 1})`}
+            </option>
+          ))}
+        </select>
+      </div>
+    );
+  };
+
   if (!isConnected) {
     return (
-      <div className={styles.card} style={{ textAlign: 'center' }}>
-        <p>Please connect your wallet to access admin functions.</p>
+      <div className={styles.connectCard}>
+        <div className={styles.connectIcon}>
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M10 16.5L14 12.5L10 8.5" stroke="#0D76FC" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M14 12.5H3" stroke="#0D76FC" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M7 7V5C7 4.46957 7.21071 3.96086 7.58579 3.58579C7.96086 3.21071 8.46957 3 9 3H19C19.5304 3 20.0391 3.21071 20.4142 3.58579C20.7893 3.96086 21 4.46957 21 5V20C21 20.5304 20.7893 21.0391 20.4142 21.4142C20.0391 21.7893 19.5304 22 19 22H9C8.46957 22 7.96086 21.7893 7.58579 21.4142C7.21071 21.0391 7 20.5304 7 20V18" stroke="#0D76FC" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </div>
+        <p>Please connect your wallet to access the admin panel.</p>
+      </div>
+    );
+  }
+
+  if (isCheckingOwnership) {
+    return (
+      <div className={styles.card} style={{ textAlign: 'center', maxWidth: '500px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+          <div className={styles.loadingSpinner}></div>
+          <p>Checking admin permissions...</p>
+        </div>
       </div>
     );
   }
 
   if (!isOwner) {
     return (
-      <div className={styles.card} style={{ textAlign: 'center', borderColor: '#dc3545' }}>
-        <p style={{ color: '#dc3545' }}>
-          Only the contract owner can access this page.
+      <div className={styles.card} style={{ textAlign: 'center', borderColor: '#dc3545', maxWidth: '500px' }}>
+        <p style={{ color: '#dc3545', marginBottom: '1rem' }}>
+          You are not the owner of any swapper contract.
         </p>
+        <p>
+          Only the contract owner can access the admin panel. Please connect with the owner account.
+        </p>
+        <div style={{ marginTop: '1rem', fontSize: '0.9rem', color: '#6c757d' }}>
+          Connected address: {address}
+        </div>
       </div>
     );
   }
 
   return (
-    <>
+    <div style={{ width: '100%', maxWidth: '700px' }}>
+      <ContractSelector />
+      
       <div className={styles.tabContainer}>
-        <button 
-          onClick={() => setActiveTab('balances')} 
-          className={`${styles.tabButton} ${activeTab === 'balances' ? styles.tabButtonActive : ''}`}
-        >
-          Balances & Requests
-        </button>
         <button 
           onClick={() => setActiveTab('withdraw')} 
           className={`${styles.tabButton} ${activeTab === 'withdraw' ? styles.tabButtonActive : ''}`}
         >
-          Withdraw ETH
+          Withdraw
         </button>
         <button 
           onClick={() => setActiveTab('transferNft')} 
@@ -307,6 +377,12 @@ const AdminContent = () => {
           className={`${styles.tabButton} ${activeTab === 'permissions' ? styles.tabButtonActive : ''}`}
         >
           Permissions
+        </button>
+        <button 
+          onClick={() => setActiveTab('balances')} 
+          className={`${styles.tabButton} ${activeTab === 'balances' ? styles.tabButtonActive : ''}`}
+        >
+          Balances
         </button>
       </div>
 
@@ -617,7 +693,7 @@ const AdminContent = () => {
           </div>
         )}
       </div>
-    </>
+    </div>
   );
 };
 
