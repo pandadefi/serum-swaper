@@ -1,7 +1,7 @@
 // Swapper contract addresses
 export const SWAPPER_CONTRACT_ADDRESSES: `0x${string}`[] = [
   '0xc32B5d94C1f27E1f02a262a75e10169e71ca7d5D' as `0x${string}`,
-  '0xd23cb9befab3030ddbb0347ec3dabcb384d66ee2' as `0x${string}`
+  '0xEcE067Ad6Da30b276fB5F28bFd1e60240d023235' as `0x${string}`
 ];
 
 // Default swapper contract address (for backward compatibility)
