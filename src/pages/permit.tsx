@@ -634,7 +634,7 @@ const Permit: NextPage = () => {
                   ) : (
                     <div className={styles.errorMessage}>
                       <h4>No Permit Signature</h4>
-                      <p>Please create a permit signature first in the Create Permit tab</p>
+                      <p>Please create a permit signature first in the `Create Permit` tab</p>
                     </div>
                   )}
                 </>
