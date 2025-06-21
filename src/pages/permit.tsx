@@ -3,7 +3,7 @@ import type { NextPage } from 'next';
 import Head from 'next/head';
 import styles from '../styles/Home.module.css';
 import { useState, useEffect } from 'react';
-import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract, useSignTypedData } from 'wagmi';
+import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract, useSignTypedData, useChainId } from 'wagmi';
 import { parseEther, formatEther, hexToBigInt, encodeFunctionData } from 'viem';
 import { STETH_ADDRESS, ERC20_ABI } from '../constants';
 import Link from 'next/link';
@@ -105,6 +105,9 @@ const Permit: NextPage = () => {
     validAfter: bigint;
     validBefore: bigint;
     nonce: `0x${string}`;
+    amount: bigint;
+    from: string;
+    to: string;
   } | null>(null);
   const [isMounted, setIsMounted] = useState(false);
   const [recipient, setRecipient] = useState<string>('');
@@ -161,6 +164,7 @@ const Permit: NextPage = () => {
   };
 
   const { address, isConnected } = useAccount();
+  const chainId = useChainId();
 
   // Set mounted state for client-side rendering
   useEffect(() => {
@@ -231,10 +235,24 @@ const Permit: NextPage = () => {
     const amountBigInt = parseTokenAmount(amount, tokenDecimals);
     const nonce = generateNonce();
 
+    // Store the signature parameters for later use
+    const signatureParams = {
+      validAfter,
+      validBefore,
+      amountBigInt,
+      nonce,
+      fromAddress: ownerAddress,
+      toAddress: spenderAddress,
+    };
+
+    // Store in component state temporarily
+    (window as any).pendingSignatureParams = signatureParams;
+
+    // USDC uses specific domain configuration
     const domain = {
       name: tokenName,
-      version: '2', // EIP-3009 typically uses version 2
-      chainId: 1, // Ethereum mainnet
+      version: selectedToken === 'USDC' ? '2' : '2', // USDC uses version 2
+      chainId: chainId,
       verifyingContract: tokenAddress as `0x${string}`,
     };
 
@@ -273,9 +291,9 @@ const Permit: NextPage = () => {
   // Process signature when available and store authorization data
   useEffect(() => {
     if (signature && deadline) {
-      const validAfter = BigInt(0);
-      const validBefore = BigInt(Math.floor(Date.now() / 1000) + parseInt(deadline) * 60);
-      const nonce = generateNonce();
+      // Get the stored signature parameters
+      const params = (window as any).pendingSignatureParams;
+      if (!params) return;
       
       // Parse the signature
       const r = signature.slice(0, 66) as `0x${string}`;
@@ -286,19 +304,22 @@ const Permit: NextPage = () => {
         v,
         r,
         s,
-        validAfter,
-        validBefore,
-        nonce,
+        validAfter: params.validAfter,
+        validBefore: params.validBefore,
+        nonce: params.nonce,
+        amount: params.amountBigInt,
+        from: params.fromAddress,
+        to: params.toAddress,
       });
+      
+      // Clean up
+      delete (window as any).pendingSignatureParams;
     }
   }, [signature, deadline]);
 
   // Use transferWithAuthorization to transfer tokens in one transaction
   const handleUseAuth = async () => {
-    if (!authSignature || !tokenAddress || !ownerAddress || !recipient || !amount) return;
-
-    const tokenDecimals = currentTokenInfo?.decimals || 18;
-    const amountBigInt = parseTokenAmount(amount, tokenDecimals);
+    if (!authSignature || !tokenAddress) return;
 
     try {
       writeContract({
@@ -306,9 +327,9 @@ const Permit: NextPage = () => {
         abi: ERC20_PERMIT_ABI,
         functionName: 'transferWithAuthorization',
         args: [
-          ownerAddress as `0x${string}`,
-          recipient as `0x${string}`,
-          amountBigInt,
+          authSignature.from as `0x${string}`,
+          authSignature.to as `0x${string}`,
+          authSignature.amount,
           authSignature.validAfter,
           authSignature.validBefore,
           authSignature.nonce,
