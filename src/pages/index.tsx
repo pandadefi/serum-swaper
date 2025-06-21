@@ -564,17 +564,8 @@ const Home: NextPage = () => {
       </main>
 
       <footer className={styles.footer}>
-        <Link href="/approval" style={{ marginRight: '1rem' }}>Token Approval</Link>
         <Link href="/admin" style={{ marginRight: '1rem' }}>Admin</Link>
-        <Link href="https://github.com/your-username/serum-swapper" target="_blank" rel="noopener noreferrer">
-          <div className={styles.footerLogo}>
-            <svg width="24" height="24" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="24" cy="24" r="24" fill="#00A3FF" opacity="0.5" />
-              <path d="M24 28L28 24L24 20L20 24L24 28Z" fill="#00A3FF" />
-            </svg>
-            <span>Staked stETH</span>
-          </div>
-        </Link>
+        <Link href="/erc20-auth" style={{ marginRight: '1rem' }}>ERC20 Auth</Link>
       </footer>
     </div>
   );
