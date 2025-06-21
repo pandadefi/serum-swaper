@@ -565,7 +565,7 @@ const Home: NextPage = () => {
 
       <footer className={styles.footer}>
         <Link href="/admin" style={{ marginRight: '1rem' }}>Admin</Link>
-        <Link href="/erc20-auth" style={{ marginRight: '1rem' }}>ERC20 Auth</Link>
+        <Link href="/permit">ERC20 Permit</Link>
       </footer>
     </div>
   );
