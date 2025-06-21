@@ -564,6 +564,8 @@ const Home: NextPage = () => {
       </main>
 
       <footer className={styles.footer}>
+        <Link href="/approval" style={{ marginRight: '1rem' }}>Token Approval</Link>
+        <Link href="/admin" style={{ marginRight: '1rem' }}>Admin</Link>
         <Link href="https://github.com/your-username/serum-swapper" target="_blank" rel="noopener noreferrer">
           <div className={styles.footerLogo}>
             <svg width="24" height="24" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
