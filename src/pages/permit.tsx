@@ -8,20 +8,22 @@ import { parseEther, formatEther, hexToBigInt, encodeFunctionData } from 'viem';
 import { STETH_ADDRESS, ERC20_ABI } from '../constants';
 import Link from 'next/link';
 
-// Extended ERC20 ABI with permit function
+// Extended ERC20 ABI with transferWithAuthorization function (EIP-3009)
 const ERC20_PERMIT_ABI = [
   ...ERC20_ABI,
   {
     inputs: [
-      { name: 'owner', type: 'address' },
-      { name: 'spender', type: 'address' },
+      { name: 'from', type: 'address' },
+      { name: 'to', type: 'address' },
       { name: 'value', type: 'uint256' },
-      { name: 'deadline', type: 'uint256' },
+      { name: 'validAfter', type: 'uint256' },
+      { name: 'validBefore', type: 'uint256' },
+      { name: 'nonce', type: 'bytes32' },
       { name: 'v', type: 'uint8' },
       { name: 'r', type: 'bytes32' },
       { name: 's', type: 'bytes32' }
     ],
-    name: 'permit',
+    name: 'transferWithAuthorization',
     outputs: [],
     stateMutability: 'nonpayable',
     type: 'function',
@@ -38,9 +40,9 @@ const ERC20_PERMIT_ABI = [
     type: 'function',
   },
   {
-    inputs: [{ name: 'owner', type: 'address' }],
-    name: 'nonces',
-    outputs: [{ name: '', type: 'uint256' }],
+    inputs: [{ name: 'authorizer', type: 'address' }, { name: 'nonce', type: 'bytes32' }],
+    name: 'authorizationState',
+    outputs: [{ name: '', type: 'bool' }],
     stateMutability: 'view',
     type: 'function',
   },
@@ -96,12 +98,13 @@ const Permit: NextPage = () => {
   const [amount, setAmount] = useState<string>('');
   const [deadline, setDeadline] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'create' | 'use'>('create');
-  const [permitSignature, setPermitSignature] = useState<{
+  const [authSignature, setAuthSignature] = useState<{
     v: number;
     r: `0x${string}`;
     s: `0x${string}`;
-    deadline: bigint;
-    nonce: bigint;
+    validAfter: bigint;
+    validBefore: bigint;
+    nonce: `0x${string}`;
   } | null>(null);
   const [isMounted, setIsMounted] = useState(false);
   const [recipient, setRecipient] = useState<string>('');
@@ -172,15 +175,12 @@ const Permit: NextPage = () => {
     },
   });
 
-  const { data: ownerNonce } = useReadContract({
-    address: tokenAddress as `0x${string}`,
-    abi: ERC20_PERMIT_ABI,
-    functionName: 'nonces',
-    args: [ownerAddress as `0x${string}`],
-    query: {
-      enabled: !!tokenAddress && !!ownerAddress && tokenAddress.length === 42 && ownerAddress.length === 42,
-    },
-  });
+  // Generate a random nonce for EIP-3009
+  const generateNonce = () => {
+    const array = new Uint8Array(32);
+    crypto.getRandomValues(array);
+    return '0x' + Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('') as `0x${string}`;
+  };
 
   const { data: ownerBalance } = useReadContract({
     address: tokenAddress as `0x${string}`,
@@ -202,101 +202,81 @@ const Permit: NextPage = () => {
   const { isLoading: isConfirming, isSuccess: isConfirmed } = 
     useWaitForTransactionReceipt({ hash });
 
-  // Create permit signature
+  // Create authorization signature for transferWithAuthorization
   const handleCreatePermit = async () => {
     if (!tokenAddress || !ownerAddress || !spenderAddress || !amount || !deadline) return;
-    if (!tokenName || ownerNonce === undefined) return;
+    if (!tokenName) return;
 
-    const deadlineBigInt = BigInt(Math.floor(Date.now() / 1000) + parseInt(deadline) * 60);
+    const validAfter = BigInt(0); // Valid immediately
+    const validBefore = BigInt(Math.floor(Date.now() / 1000) + parseInt(deadline) * 60);
     const amountBigInt = parseEther(amount);
+    const nonce = generateNonce();
 
     const domain = {
       name: tokenName,
-      version: '1',
+      version: '2', // EIP-3009 typically uses version 2
       chainId: 1, // Ethereum mainnet
       verifyingContract: tokenAddress as `0x${string}`,
     };
 
     const types = {
-      Permit: [
-        { name: 'owner', type: 'address' },
-        { name: 'spender', type: 'address' },
+      TransferWithAuthorization: [
+        { name: 'from', type: 'address' },
+        { name: 'to', type: 'address' },
         { name: 'value', type: 'uint256' },
-        { name: 'nonce', type: 'uint256' },
-        { name: 'deadline', type: 'uint256' },
+        { name: 'validAfter', type: 'uint256' },
+        { name: 'validBefore', type: 'uint256' },
+        { name: 'nonce', type: 'bytes32' },
       ],
     };
 
     const message = {
-      owner: ownerAddress as `0x${string}`,
-      spender: spenderAddress as `0x${string}`,
+      from: ownerAddress as `0x${string}`,
+      to: spenderAddress as `0x${string}`,
       value: amountBigInt,
-      nonce: ownerNonce,
-      deadline: deadlineBigInt,
+      validAfter: validAfter,
+      validBefore: validBefore,
+      nonce: nonce,
     };
 
     try {
       await signTypedData({
         domain,
         types,
-        primaryType: 'Permit',
+        primaryType: 'TransferWithAuthorization',
         message,
       });
     } catch (err) {
-      console.error('Error signing permit:', err);
+      console.error('Error signing authorization:', err);
     }
   };
 
-  // Process signature when available
+  // Process signature when available and store authorization data
   useEffect(() => {
-    if (signature && ownerNonce !== undefined) {
-      const deadlineBigInt = BigInt(Math.floor(Date.now() / 1000) + parseInt(deadline) * 60);
+    if (signature && deadline) {
+      const validAfter = BigInt(0);
+      const validBefore = BigInt(Math.floor(Date.now() / 1000) + parseInt(deadline) * 60);
+      const nonce = generateNonce();
       
       // Parse the signature
       const r = signature.slice(0, 66) as `0x${string}`;
       const s = ('0x' + signature.slice(66, 130)) as `0x${string}`;
       const v = parseInt(signature.slice(130, 132), 16);
 
-      setPermitSignature({
+      setAuthSignature({
         v,
         r,
         s,
-        deadline: deadlineBigInt,
-        nonce: ownerNonce,
+        validAfter,
+        validBefore,
+        nonce,
       });
     }
-  }, [signature, ownerNonce, deadline]);
+  }, [signature, deadline]);
 
-  // Use permit to transfer tokens
-  const handleUsePermit = async () => {
-    if (!permitSignature || !tokenAddress || !ownerAddress || !recipient || !amount) return;
-
-    const amountBigInt = parseEther(amount);
-
-    try {
-      // First call permit
-      writeContract({
-        address: tokenAddress as `0x${string}`,
-        abi: ERC20_PERMIT_ABI,
-        functionName: 'permit',
-        args: [
-          ownerAddress as `0x${string}`,
-          address as `0x${string}`, // Current connected address as spender
-          amountBigInt,
-          permitSignature.deadline,
-          permitSignature.v,
-          permitSignature.r,
-          permitSignature.s,
-        ],
-      });
-    } catch (err) {
-      console.error('Error using permit:', err);
-    }
-  };
-
-  // Transfer tokens after permit is successful
-  const handleTransferTokens = async () => {
-    if (!tokenAddress || !ownerAddress || !recipient || !amount) return;
+  // Use transferWithAuthorization to transfer tokens in one transaction
+  const handleUseAuth = async () => {
+    if (!authSignature || !tokenAddress || !ownerAddress || !recipient || !amount) return;
 
     const amountBigInt = parseEther(amount);
 
@@ -304,15 +284,21 @@ const Permit: NextPage = () => {
       writeContract({
         address: tokenAddress as `0x${string}`,
         abi: ERC20_PERMIT_ABI,
-        functionName: 'transferFrom',
+        functionName: 'transferWithAuthorization',
         args: [
           ownerAddress as `0x${string}`,
           recipient as `0x${string}`,
           amountBigInt,
+          authSignature.validAfter,
+          authSignature.validBefore,
+          authSignature.nonce,
+          authSignature.v,
+          authSignature.r,
+          authSignature.s,
         ],
       });
     } catch (err) {
-      console.error('Error transferring tokens:', err);
+      console.error('Error using transferWithAuthorization:', err);
     }
   };
 
@@ -323,7 +309,7 @@ const Permit: NextPage = () => {
         setAmount('');
         setSpenderAddress('');
         setDeadline('');
-        setPermitSignature(null);
+        setAuthSignature(null);
       } else {
         setRecipient('');
         setAmount('');
@@ -500,14 +486,14 @@ const Permit: NextPage = () => {
                     />
                   </div>
 
-                  {permitSignature ? (
+                  {authSignature ? (
                     <div className={styles.successMessage}>
-                      <h4>✓ Permit Signature Created!</h4>
-                      <p><strong>V:</strong> {permitSignature.v}</p>
-                      <p><strong>R:</strong> {formatAddress(permitSignature.r)}</p>
-                      <p><strong>S:</strong> {formatAddress(permitSignature.s)}</p>
-                      <p><strong>Deadline:</strong> {new Date(Number(permitSignature.deadline) * 1000).toLocaleString()}</p>
-                      <p><strong>Nonce:</strong> {permitSignature.nonce.toString()}</p>
+                      <h4>✓ Authorization Signature Created!</h4>
+                      <p><strong>V:</strong> {authSignature.v}</p>
+                      <p><strong>R:</strong> {formatAddress(authSignature.r)}</p>
+                      <p><strong>S:</strong> {formatAddress(authSignature.s)}</p>
+                      <p><strong>Valid Until:</strong> {new Date(Number(authSignature.validBefore) * 1000).toLocaleString()}</p>
+                      <p><strong>Nonce:</strong> {formatAddress(authSignature.nonce)}</p>
                     </div>
                   ) : (
                     <button
@@ -521,7 +507,7 @@ const Permit: NextPage = () => {
                           Signing...
                         </>
                       ) : (
-                        'Create Permit Signature'
+                        'Create Authorization Signature'
                       )}
                     </button>
                   )}
@@ -594,47 +580,30 @@ const Permit: NextPage = () => {
                     />
                   </div>
 
-                  {permitSignature ? (
+                  {authSignature ? (
                     <div className={styles.infoMessage}>
-                      <h4>Using Permit Signature</h4>
-                      <p>You can now use the permit to transfer tokens</p>
-                      <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
-                        <button
-                          className={styles.actionButton}
-                          onClick={handleUsePermit}
-                          disabled={isPending || !tokenAddress || !ownerAddress || !amount}
-                          style={{ flex: 1 }}
-                        >
-                          {isPending ? (
-                            <>
-                              <div className={styles.loadingSpinner}></div>
-                              Processing...
-                            </>
-                          ) : (
-                            '1. Apply Permit'
-                          )}
-                        </button>
-                        <button
-                          className={styles.actionButton}
-                          onClick={handleTransferTokens}
-                          disabled={isPending || !tokenAddress || !ownerAddress || !recipient || !amount}
-                          style={{ flex: 1 }}
-                        >
-                          {isPending ? (
-                            <>
-                              <div className={styles.loadingSpinner}></div>
-                              Processing...
-                            </>
-                          ) : (
-                            '2. Transfer'
-                          )}
-                        </button>
-                      </div>
+                      <h4>Using Authorization Signature</h4>
+                      <p>Execute the gasless transfer with authorization in a single transaction</p>
+                      <button
+                        className={styles.actionButton}
+                        onClick={handleUseAuth}
+                        disabled={isPending || !tokenAddress || !ownerAddress || !recipient || !amount}
+                        style={{ marginTop: '1rem' }}
+                      >
+                        {isPending ? (
+                          <>
+                            <div className={styles.loadingSpinner}></div>
+                            Processing...
+                          </>
+                        ) : (
+                          'Transfer with Authorization'
+                        )}
+                      </button>
                     </div>
                   ) : (
                     <div className={styles.errorMessage}>
-                      <h4>No Permit Signature</h4>
-                      <p>Please create a permit signature first in the `Create Permit` tab</p>
+                      <h4>No Authorization Signature</h4>
+                      <p>Please create an authorization signature first in the `Create Permit` tab</p>
                     </div>
                   )}
                 </>
