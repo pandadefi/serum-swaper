@@ -142,6 +142,24 @@ const Permit: NextPage = () => {
     return `${wholePart.toString()}.${trimmedFractional}`;
   };
 
+  // Parse amount based on token decimals
+  const parseTokenAmount = (amount: string, decimals: number = 18) => {
+    if (!amount || amount === '') return BigInt(0);
+    
+    // Handle decimal input
+    const parts = amount.split('.');
+    const wholePart = parts[0] || '0';
+    const fractionalPart = parts[1] || '';
+    
+    // Pad or truncate fractional part to match token decimals
+    const paddedFractional = fractionalPart.padEnd(decimals, '0').slice(0, decimals);
+    
+    // Combine whole and fractional parts
+    const fullNumber = wholePart + paddedFractional;
+    
+    return BigInt(fullNumber);
+  };
+
   const { address, isConnected } = useAccount();
 
   // Set mounted state for client-side rendering
@@ -209,7 +227,8 @@ const Permit: NextPage = () => {
 
     const validAfter = BigInt(0); // Valid immediately
     const validBefore = BigInt(Math.floor(Date.now() / 1000) + parseInt(deadline) * 60);
-    const amountBigInt = parseEther(amount);
+    const tokenDecimals = currentTokenInfo?.decimals || 18;
+    const amountBigInt = parseTokenAmount(amount, tokenDecimals);
     const nonce = generateNonce();
 
     const domain = {
@@ -278,7 +297,8 @@ const Permit: NextPage = () => {
   const handleUseAuth = async () => {
     if (!authSignature || !tokenAddress || !ownerAddress || !recipient || !amount) return;
 
-    const amountBigInt = parseEther(amount);
+    const tokenDecimals = currentTokenInfo?.decimals || 18;
+    const amountBigInt = parseTokenAmount(amount, tokenDecimals);
 
     try {
       writeContract({
