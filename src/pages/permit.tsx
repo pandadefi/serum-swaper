@@ -119,6 +119,26 @@ const Permit: NextPage = () => {
     }
   };
 
+  // Get current token info
+  const currentTokenInfo = PRESET_TOKENS.find(token => token.symbol === selectedToken);
+
+  // Format balance based on token decimals
+  const formatTokenBalance = (balance: bigint, decimals: number = 18) => {
+    const divisor = BigInt(10 ** decimals);
+    const wholePart = balance / divisor;
+    const fractionalPart = balance % divisor;
+    
+    // Convert to string with proper decimal places
+    const fractionalStr = fractionalPart.toString().padStart(decimals, '0');
+    const trimmedFractional = fractionalStr.replace(/0+$/, '').slice(0, 4); // Show max 4 decimal places, trim trailing zeros
+    
+    if (trimmedFractional === '') {
+      return wholePart.toString();
+    }
+    
+    return `${wholePart.toString()}.${trimmedFractional}`;
+  };
+
   const { address, isConnected } = useAccount();
 
   // Set mounted state for client-side rendering
@@ -439,11 +459,11 @@ const Permit: NextPage = () => {
                       onChange={(e) => setOwnerAddress(e.target.value)}
                       placeholder="0x..."
                     />
-                    Balance: {ownerBalance && (
-                      <div className={styles.balanceHint}>
-                        Balance: <span>{parseFloat(formatEther(ownerBalance)).toFixed(4)}</span>
-                      </div>
-                    )}
+                                         {ownerBalance && (
+                       <div className={styles.balanceHint}>
+                         Balance: <span>{formatTokenBalance(ownerBalance, currentTokenInfo?.decimals || 18)} {selectedToken === 'custom' ? 'tokens' : currentTokenInfo?.symbol}</span>
+                       </div>
+                     )}
                   </div>
 
                   <div className={styles.inputGroup}>
