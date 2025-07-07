@@ -593,13 +593,13 @@ const AdminContent = () => {
                     <span style={{ fontWeight: 'bold' }}>Total Assets:</span>{' '}
                     {totalEthError || wethError || withdrawalStatusError ? (
                       <span style={{ color: '#dc3545' }}>Error loading balances</span>
-                    ) : totalEth && wethBalance && withdrawalStatuses ? (
+                    ) : totalEth && wethBalance && (withdrawalStatuses || withdrawalRequestIds?.length === 0) ? (
                       `${formatEther(
                         wethBalance + 
-                        withdrawalStatuses.reduce(
+                        (withdrawalStatuses?.reduce(
                           (acc, status) => acc + status.amountOfStETH,
                           BigInt(0)
-                        )
+                        ) || BigInt(0))
                       )} ETH`
                     ) : (
                       'Loading...'
@@ -615,13 +615,13 @@ const AdminContent = () => {
                     <span style={{ fontWeight: 'bold' }}>Total Gains:</span>{' '}
                     {totalEthError || wethError || withdrawalStatusError ? (
                       <span style={{ color: '#dc3545' }}>Error loading balances</span>
-                    ) : totalEth && wethBalance && withdrawalStatuses ? (
+                    ) : totalEth && wethBalance && (withdrawalStatuses || withdrawalRequestIds?.length === 0) ? (
                       `${formatEther(
                         (wethBalance + 
-                        withdrawalStatuses.reduce(
+                        (withdrawalStatuses?.reduce(
                           (acc, status) => acc + status.amountOfStETH,
                           BigInt(0)
-                        )) - totalEth
+                        ) || BigInt(0))) - totalEth
                       )} ETH`
                     ) : (
                       'Loading...'
